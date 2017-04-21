@@ -69,6 +69,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <inttypes.h>
+#include <limits.h>
 
 #include "commandline.h"
 #include "connection.h"
@@ -80,6 +81,7 @@
 
 #define PAGE "<html><head><title>libmicrohttpd demo</title>"\
     "</head><body>libmicrohttpd demo</body></html>"
+#define DB_PATH "/tmp/lwm2m.db"
 
 static int ahc_echo(void *cls,
         struct MHD_Connection *connection,
@@ -607,7 +609,7 @@ static void prv_create_client(char * buffer,
     {
         lwm2m_data_t * dataP;
 
-        if (1 != sscanf(buffer, "%d", &value))
+        if (1 != sscanf(buffer, "%"SCNd64, &value))
         {
             fprintf(stdout, "Invalid value !");
             return;
@@ -809,10 +811,12 @@ void handle_sigint(int signum)
 void print_usage(void)
 {
     fprintf(stderr, "Usage: lwm2mserver [OPTION]\r\n");
-    fprintf(stderr, "Launch a LWM2M server on localhost.\r\n\n");
+    fprintf(stderr, "Launch a LWM2M server.\r\n\n");
     fprintf(stdout, "Options:\r\n");
     fprintf(stdout, "  -4\t\tUse IPv4 connection. Default: IPv6 connection\r\n");
     fprintf(stdout, "  -l PORT\tSet the local UDP port of the Server. Default: "LWM2M_STANDARD_PORT_STR"\r\n");
+    fprintf(stdout, "  -db-path\tDatabase file. Default: "DB_PATH"\r\n");
+    fprintf(stdout, "  -wipe-db\tWipe DB on start-up if flag is provided.\r\n");
     fprintf(stdout, "\r\n");
 }
 
@@ -829,6 +833,9 @@ int main(int argc, char *argv[])
     int addressFamily = AF_INET6;
     int opt;
     const char * localPort = LWM2M_STANDARD_PORT_STR;
+
+    char db_path[PATH_MAX] = DB_PATH;
+    bool wipe_db = false;
 
     command_desc_t commands[] =
     {
@@ -894,8 +901,7 @@ int main(int argc, char *argv[])
     while (opt < argc)
     {
         if (argv[opt] == NULL
-            || argv[opt][0] != '-'
-            || argv[opt][2] != 0)
+            || argv[opt][0] != '-')
         {
             print_usage();
             return 0;
@@ -914,6 +920,29 @@ int main(int argc, char *argv[])
             }
             localPort = argv[opt];
             break;
+        case 'd':
+            if (strcmp(argv[opt], "-db-path") == 0)
+            {
+                opt++;
+                strcpy(db_path, argv[opt]);
+            }
+            else
+            {
+                print_usage();
+                return 0;
+            }
+            break;
+        case 'w':
+            if (strcmp(argv[opt], "-wipe-db") == 0)
+            {
+                wipe_db = true;
+            }
+            else
+            {
+                print_usage();
+                return 0;
+            }
+            break;
         default:
             print_usage();
             return 0;
@@ -921,6 +950,7 @@ int main(int argc, char *argv[])
         opt += 1;
     }
 
+    printf("%s %d\n", db_path, wipe_db);
 
     struct MHD_Daemon *d = MHD_start_daemon(MHD_USE_THREAD_PER_CONNECTION,
                                             8080, NULL, NULL, &ahc_echo,
@@ -1004,7 +1034,7 @@ int main(int argc, char *argv[])
                     in_port_t port;
                     connection_t * connP;
 
-					s[0] = 0;
+                    s[0] = 0;
                     if (AF_INET == addr.ss_family)
                     {
                         struct sockaddr_in *saddr = (struct sockaddr_in *)&addr;
