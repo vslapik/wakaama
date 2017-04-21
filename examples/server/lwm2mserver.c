@@ -74,23 +74,13 @@
 #include "commandline.h"
 #include "connection.h"
 #include "db.h"
+#include "rest.h"
 
 #include <microhttpd.h>
 
 #define MAX_PACKET_SIZE 1024
 
-#define PAGE "<html><head><title>libmicrohttpd demo</title>"\
-    "</head><body>libmicrohttpd demo</body></html>"
-#define DB_PATH "/tmp/lwm2m.db"
-
-static int ahc_echo(void *cls,
-        struct MHD_Connection *connection,
-        const char *url,
-        const char *method,
-        const char *version,
-        const char *upload_data,
-        size_t *upload_data_size,
-        void **ptr);
+#define DB_PATH "lwm2m.db"
 
 static int g_quit = 0;
 
@@ -950,15 +940,19 @@ int main(int argc, char *argv[])
         opt += 1;
     }
 
+    if (access(db_path, F_OK) == -1)
+    {
+        wipe_db = true;
+    }
 
-    struct MHD_Daemon *d = MHD_start_daemon(MHD_USE_THREAD_PER_CONNECTION,
-                                            8080, NULL, NULL, &ahc_echo,
-                                            PAGE, MHD_OPTION_END);
+    start_httpd();
+
     sqlite3 *db;
-    int rc = sqlite3_open("db", &db);
+    int rc = sqlite3_open(db_path, &db);
     if (rc)
     {
         fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
+        abort();
     }
     if (wipe_db)
     {
@@ -1103,7 +1097,7 @@ int main(int argc, char *argv[])
     close(sock);
     connection_free(connList);
 
-    MHD_stop_daemon(d);
+    stop_httpd();
     sqlite3_close(db);
 
 #ifdef MEMORY_TRACE
