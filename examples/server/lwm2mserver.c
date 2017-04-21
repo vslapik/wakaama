@@ -73,7 +73,22 @@
 #include "commandline.h"
 #include "connection.h"
 
+#include <microhttpd.h>
+#include <sqlite3.h>
+
 #define MAX_PACKET_SIZE 1024
+
+#define PAGE "<html><head><title>libmicrohttpd demo</title>"\
+    "</head><body>libmicrohttpd demo</body></html>"
+
+static int ahc_echo(void *cls,
+        struct MHD_Connection *connection,
+        const char *url,
+        const char *method,
+        const char *version,
+        const char *upload_data,
+        size_t *upload_data_size,
+        void **ptr);
 
 static int g_quit = 0;
 
@@ -906,6 +921,17 @@ int main(int argc, char *argv[])
         opt += 1;
     }
 
+
+    struct MHD_Daemon *d = MHD_start_daemon(MHD_USE_THREAD_PER_CONNECTION,
+                                            8080, NULL, NULL, &ahc_echo,
+                                            PAGE, MHD_OPTION_END);
+    sqlite3 *db;
+    int rc = sqlite3_open("db", &db);
+    if (rc)
+    {
+        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
+    }
+
     sock = create_socket(localPort, addressFamily);
     if (sock < 0)
     {
@@ -1037,6 +1063,9 @@ int main(int argc, char *argv[])
     close(sock);
     connection_free(connList);
 
+    MHD_stop_daemon(d);
+    sqlite3_close(db);
+
 #ifdef MEMORY_TRACE
     if (g_quit == 1)
     {
@@ -1045,4 +1074,46 @@ int main(int argc, char *argv[])
 #endif
 
     return 0;
+}
+
+static int ahc_echo(void *cls,
+        struct MHD_Connection *connection,
+        const char *url,
+        const char *method,
+        const char *version,
+        const char *upload_data,
+        size_t *upload_data_size,
+        void **ptr)
+{
+    static int dummy;
+    const char *page = cls;
+    struct MHD_Response *response;
+    int ret;
+
+    if (0 != strcmp(method, "GET"))
+        return MHD_NO; /* unexpected method */
+
+    if (&dummy != *ptr)
+    {
+        /* The first time only the headers are valid,
+           do not respond in the first round... */
+        *ptr = &dummy;
+        return MHD_YES;
+    }
+
+    if (0 != *upload_data_size)
+        return MHD_NO; /* upload data in a GET!? */
+
+    *ptr = NULL; /* clear context pointer */
+
+    const char *buf = "fuck you bitch";
+    response = MHD_create_response_from_buffer(strlen(buf),
+            (void*) buf, MHD_RESPMEM_PERSISTENT);
+
+    ret = MHD_queue_response(connection,
+            MHD_HTTP_OK,
+            response);
+
+    MHD_destroy_response(response);
+    return ret;
 }
