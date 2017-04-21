@@ -73,9 +73,9 @@
 
 #include "commandline.h"
 #include "connection.h"
+#include "db.h"
 
 #include <microhttpd.h>
-#include <sqlite3.h>
 
 #define MAX_PACKET_SIZE 1024
 
@@ -950,7 +950,6 @@ int main(int argc, char *argv[])
         opt += 1;
     }
 
-    printf("%s %d\n", db_path, wipe_db);
 
     struct MHD_Daemon *d = MHD_start_daemon(MHD_USE_THREAD_PER_CONNECTION,
                                             8080, NULL, NULL, &ahc_echo,
@@ -961,6 +960,17 @@ int main(int argc, char *argv[])
     {
         fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
     }
+    if (wipe_db)
+    {
+        create_tables(db);
+    }
+
+    insert_sensor(db, 42, "temperature", "C");
+    for (int i = 0; i < 100; i++)
+    {
+        insert_sample(db, 42, 33.3, i);
+    }
+    get_samples(db, 42, 0, 100);
 
     sock = create_socket(localPort, addressFamily);
     if (sock < 0)
