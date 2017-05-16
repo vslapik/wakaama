@@ -3,6 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include "rest.h"
+#include "ugeneric.h"
 
 struct MHD_Daemon *g_httpd;
 
@@ -59,9 +60,14 @@ static int handler(void *cls,
     *ptr = NULL; /* clear context pointer */
 
 
-    const char *buf = "fuck you bitch\n";
-    response = MHD_create_response_from_buffer(strlen(buf),
-            (void*) buf, MHD_RESPMEM_PERSISTENT);
+    uvector_t *v = uvector_create();
+    uvector_append(v, G_CSTR("fuck"));
+    uvector_append(v, G_CSTR("you"));
+    uvector_append(v, G_CSTR("bitch"));
+    char *str = uvector_as_str(v);
+    response = MHD_create_response_from_buffer(strlen(str),
+            (void*) str, MHD_RESPMEM_PERSISTENT);
+    uvector_destroy(v);
 
     ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
     MHD_destroy_response(response);

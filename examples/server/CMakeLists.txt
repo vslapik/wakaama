@@ -14,6 +14,8 @@ add_definitions(${SHARED_DEFINITIONS} ${WAKAAMA_DEFINITIONS})
 
 include_directories (${WAKAAMA_SOURCES_DIR} ${SHARED_INCLUDE_DIRS})
 
+execute_process(COMMAND git clone git@github.com:vslapik/ugeneric.git)
+
 SET(SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/lwm2mserver.c
     ${CMAKE_CURRENT_LIST_DIR}/db.c
@@ -22,8 +24,23 @@ SET(SOURCES
 
 SET(CMAKE_C_FLAGS "-O0 -g")
 
+add_library(ugeneric SHARED
+    ugeneric/generic.c
+    ugeneric/vector.c
+    ugeneric/dict.c
+    ugeneric/htbl.c
+    ugeneric/mem.c
+    ugeneric/bst.c
+    ugeneric/sort.c
+    ugeneric/stack.c
+    ugeneric/backtrace.c
+    ugeneric/string_utils.c
+    ugeneric/file_utils.c
+)
+include_directories(ugeneric)
 add_executable(${PROJECT_NAME} ${SOURCES} ${WAKAAMA_SOURCES} ${SHARED_SOURCES})
-target_link_libraries(lwm2mserver microhttpd sqlite3)
+target_link_libraries(lwm2mserver microhttpd sqlite3 ugeneric)
+
 
 # Add WITH_LOGS to debug variant
 set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY COMPILE_DEFINITIONS $<$<CONFIG:Debug>:WITH_LOGS>)
