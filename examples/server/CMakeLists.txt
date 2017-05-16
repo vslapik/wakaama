@@ -27,3 +27,5 @@ target_link_libraries(lwm2mserver microhttpd sqlite3)
 
 # Add WITH_LOGS to debug variant
 set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY COMPILE_DEFINITIONS $<$<CONFIG:Debug>:WITH_LOGS>)
+
+SOURCE_GROUP(wakaama FILES ${WAKAAMA_SOURCES})
