@@ -960,7 +960,7 @@ int main(int argc, char *argv[])
     }
 
     insert_sensor(db, 42, "temperature", "C");
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < 10; i++)
     {
         insert_sample(db, 42, 33.3, i);
     }
