@@ -37,3 +37,4 @@ tlvdecode
 # vs
 *.db
 core
+tags
