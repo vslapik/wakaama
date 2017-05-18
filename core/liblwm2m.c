@@ -56,6 +56,9 @@
 
 #include <stdio.h>
 
+#ifdef ESP8266
+#include "esp_common.h"
+#endif
 
 lwm2m_context_t * lwm2m_init(void * userData)
 {
@@ -67,7 +70,11 @@ lwm2m_context_t * lwm2m_init(void * userData)
     {
         memset(contextP, 0, sizeof(lwm2m_context_t));
         contextP->userData = userData;
+#ifdef ESP8266
+        srand(system_get_time()); // @ vs
+#else
         srand((int)lwm2m_gettime());
+#endif
         contextP->nextMID = rand();
     }
 

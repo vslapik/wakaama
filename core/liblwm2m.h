@@ -62,6 +62,10 @@ extern "C" {
 #include <stdbool.h>
 #include <time.h>
 
+#ifdef ESP8266
+#include "util_io.h"
+#endif
+
 #ifdef LWM2M_SERVER_MODE
 #ifndef LWM2M_SUPPORT_JSON
 #define LWM2M_SUPPORT_JSON
@@ -79,10 +83,13 @@ extern "C" {
 #ifndef LWM2M_MEMORY_TRACE
 // Allocate a block of size bytes of memory, returning a pointer to the beginning of the block.
 void * lwm2m_malloc(size_t s);
+#define lwm2m_malloc malloc
 // Deallocate a block of memory previously allocated by lwm2m_malloc() or lwm2m_strdup()
 void lwm2m_free(void * p);
+#define lwm2m_free free
 // Allocate a memory block, duplicate the string str in it and return a pointer to this new block.
 char * lwm2m_strdup(const char * str);
+#define lwm2m_strdup strdup
 #else
 // same functions as above with caller location for debugging purposes
 char * lwm2m_trace_strdup(const char * str, const char * file, const char * function, int lineno);
