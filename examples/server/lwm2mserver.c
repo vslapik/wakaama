@@ -826,6 +826,7 @@ int main(int argc, char *argv[])
 
     char db_path[PATH_MAX] = DB_PATH;
     bool wipe_db = false;
+    bool mock_db = false;
 
     command_desc_t commands[] =
     {
@@ -933,6 +934,17 @@ int main(int argc, char *argv[])
                 return 0;
             }
             break;
+        case 'm':
+            if (strcmp(argv[opt], "-mock-db") == 0)
+            {
+                mock_db = true;
+            }
+            else
+            {
+                print_usage();
+                return 0;
+            }
+            break;
         default:
             print_usage();
             return 0;
@@ -959,12 +971,15 @@ int main(int argc, char *argv[])
         create_tables(db);
     }
 
-    insert_sensor(db, 42, "temperature", "C");
-    for (int i = 0; i < 10; i++)
+    if (mock_db)
     {
-        insert_sample(db, 42, 33.3, i);
+        insert_sensor(db, 42, "temperature", "C");
+        for (int i = 0; i < 10; i++)
+        {
+            insert_sample(db, 42, 33.3, i);
+        }
+        get_samples(db, 42, 0, 100);
     }
-    get_samples(db, 42, 0, 100);
 
     sock = create_socket(localPort, addressFamily);
     if (sock < 0)
