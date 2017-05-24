@@ -957,8 +957,6 @@ int main(int argc, char *argv[])
         wipe_db = true;
     }
 
-    start_httpd();
-
     sqlite3 *db;
     int rc = sqlite3_open(db_path, &db);
     if (rc)
@@ -1004,6 +1002,9 @@ int main(int argc, char *argv[])
     fprintf(stdout, "> "); fflush(stdout);
 
     lwm2m_set_monitoring_callback(lwm2mH, prv_monitor_callback, lwm2mH);
+
+
+    start_httpd(lwm2mH);
 
     while (0 == g_quit)
     {

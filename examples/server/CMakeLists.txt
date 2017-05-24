@@ -38,6 +38,8 @@ add_library(ugeneric SHARED
     ugeneric/file_utils.c
 )
 include_directories(ugeneric)
+target_compile_definitions(ugeneric PRIVATE ENABLE_UASSERT_INPUT)
+
 add_executable(${PROJECT_NAME} ${SOURCES} ${WAKAAMA_SOURCES} ${SHARED_SOURCES})
 target_link_libraries(lwm2mserver microhttpd sqlite3 ugeneric)
 
