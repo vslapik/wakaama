@@ -70,6 +70,7 @@
 #include <signal.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <pthread.h>
 
 #include "commandline.h"
 #include "connection.h"
@@ -1003,8 +1004,9 @@ int main(int argc, char *argv[])
 
     lwm2m_set_monitoring_callback(lwm2mH, prv_monitor_callback, lwm2mH);
 
-
-    start_httpd(lwm2mH);
+    pthread_mutex_t lwm2m_lock;
+    pthread_mutex_init(&lwm2m_lock, NULL);
+    start_httpd(lwm2mH, &lwm2m_lock);
 
     while (0 == g_quit)
     {
@@ -1015,7 +1017,10 @@ int main(int argc, char *argv[])
         tv.tv_sec = 60;
         tv.tv_usec = 0;
 
+        pthread_mutex_lock(&lwm2m_lock);
         result = lwm2m_step(lwm2mH, &(tv.tv_sec));
+        pthread_mutex_unlock(&lwm2m_lock);
+
         if (result != 0)
         {
             fprintf(stderr, "lwm2m_step() failed: 0x%X\r\n", result);
@@ -1082,7 +1087,9 @@ int main(int argc, char *argv[])
                     }
                     if (connP != NULL)
                     {
+                        pthread_mutex_lock(&lwm2m_lock);
                         lwm2m_handle_packet(lwm2mH, buffer, numBytes, connP);
+                        pthread_mutex_unlock(&lwm2m_lock);
                     }
                 }
             }
@@ -1109,12 +1116,13 @@ int main(int argc, char *argv[])
         }
     }
 
+    stop_httpd();
+    sqlite3_close(db);
+
     lwm2m_close(lwm2mH);
     close(sock);
     connection_free(connList);
 
-    stop_httpd();
-    sqlite3_close(db);
 
 #ifdef MEMORY_TRACE
     if (g_quit == 1)
