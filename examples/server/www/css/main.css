@@ -1,0 +1,260 @@
+@font-face {
+    font-family: JosefinSans;
+    src: url(./fonts/JosefinSans-Regular.ttf);
+}
+
+:root {
+  --i-card-main-color: #888a87;
+  --i-card-hovered-main-color: #435668;
+}
+
+html {
+    height: 100%;
+}
+
+body {
+    font-family: JosefinSans;
+    height: 100%;
+}
+
+header {
+    height: 250px;
+    background-color: rgba(128, 128, 128, 0.64);
+    position: relative;
+    z-index: -1;
+    background-image: url("../img/pattern_heading.png");
+}
+
+/*header h1 {
+    font-size: 50px;
+    font-weight: 700;
+}
+
+header h3 {
+    margin-top: 0;
+    font-weight: 500;
+}
+*/
+.page-wrapper {
+    margin: 0 auto;
+    min-height: 100%;
+    height: auto !important;
+    height: 100%;
+}
+
+.page-content-wrapper {
+    height: 100%;
+    margin:auto;
+}
+
+.main-wrapper {
+    min-height: 600px;
+    height: 100%;
+    margin-top: -130px;
+    background-color: white;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+}
+
+.i-card-content {
+    height: 180px;
+    padding: 10px 15px 30px 15px;
+    margin-top: -1px;
+}
+
+.i-card {
+    position: relative;
+    text-align: center;
+    box-sizing: border-box;
+    border: 1px solid #e6e6e6;
+    box-shadow: 0 3px 3px rgba(0,0,0,0.08), 0 3px 3px rgba(0,0,0,0.08);
+    transition: all 0.3s ease-out/* cubic-bezier(.25,.8,.25,1) */;
+    margin-bottom: 20px;
+    color: var(--i-card-main-color);
+}
+
+.i-card:hover,
+.i-card-details-open .i-card {
+    cursor: pointer;
+    color: var(--i-card-hovered-main-color);
+    box-shadow: 0 7px 15px rgba(0,0,0,.16);
+}
+
+.i-card .i-card-heading {
+    position: relative;
+    max-height: 150px;
+    overflow: hidden;
+}
+.i-card .i-card-heading .i-card-heading-image-mask {
+    min-width: 100%;
+    min-height: 150px;
+    padding-top: 20px;
+}
+
+.i-card .i-card-heading .i-card-heading-image-mask {
+    background-image: url("../img/pattern1.png");
+}
+
+.i-card:hover .i-card-heading .i-card-heading-image-mask,
+.i-card-details-open .i-card .i-card-heading .i-card-heading-image-mask {
+    background-image: url("../img/pattern2.png");
+}
+
+.i-card .i-card-logo {
+    height: 0;
+}
+
+.i-card .i-card-logo .i-card-logo-content-wrap {
+    position: relative;
+    width: 110px;
+    height: 110px;
+    margin-left: auto;
+    margin-right: auto;
+    top: -60px;
+    border-radius: 55px;
+    background-color: white;
+}
+
+.i-card .i-card-logo .i-card-logo-icon {
+    position: absolute;
+    width: 100px;
+    left: 6px;
+    top: 7px;
+    font-size: 55px;
+    line-height: 100px;
+    text-align: center;
+}
+
+.i-card .i-card-logo .i-card-logo-background {
+    position: absolute;
+    width: 90px;
+    height: 90px;
+    left: 10px;
+    top: 10px;
+    border: 3px solid;
+    border-radius: 50px;
+}
+
+.i-card .i-card-logo .i-card-logo-background {
+    border-color: var(--i-card-main-color);
+}
+
+.i-card:hover .i-card-logo .i-card-logo-background,
+.i-card-details-open .i-card .i-card-logo .i-card-logo-background {
+    border-color: var(--i-card-hovered-main-color);
+}
+
+.i-card .flip-item .front .i-card-logo-background {
+    background-color: var(--i-card-main-color);
+}
+
+.i-card .flip-item .back .i-card-logo-background {
+    background-color: white;
+}
+
+.i-card:hover .flip-item .front .i-card-logo-background,
+.i-card-details-open .i-card .flip-item .front .i-card-logo-background {
+    background-color: var(--i-card-hovered-main-color);
+}
+
+.i-card-heading .i-card-heading-text {
+    text-transform: capitalize;
+    letter-spacing: 1px;
+    margin-top: 0;
+    color: white;
+    letter-spacing: 0.01rem;
+    font-family: 'Open Sans', sans-serif;
+}
+
+.sensor-value {
+    margin-top: 35px;
+}
+
+.sensor-value h2 {
+    font-size: 70px;
+    margin-bottom: 0;
+}
+
+.sensor-value h3 {
+    font-size: 25px;
+    margin-top: 0;
+}
+
+.flip-container { 
+  position: relative;
+  perspective: 800px;
+}
+
+.flip-item {
+  transform-style: preserve-3d;
+  transition: transform 0.6s;
+  transition-timing-function: ease-out;
+
+}
+
+.flip-item:hover {
+    cursor: pointer;
+}
+
+.flip-item figure {
+    margin: 0;
+    display: block;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+}
+
+.flip-item.flipped {
+  transform: rotateY( 180deg );
+}
+
+.flip-item .back {
+    transform: rotateY( 180deg );
+}
+
+.flip-item .front .i-card-logo-icon {
+    color: white;
+}
+
+.details-i-card {
+    height: 250px;
+}
+
+.i-card-wrapper.i-card-details-open:before {
+    content: '';
+    width: 0;
+    height: 0;
+    border-left: 16px solid rgba(255,255,255,0);
+    border-right: 16px solid rgba(255,255,255,0);
+    border-bottom: 15px solid #e6e6e6;
+    position: absolute;
+    bottom: 0px;
+    left: calc(50% - 11px);
+    z-index: 100;
+}
+
+.i-card-wrapper.i-card-details-open:after {
+    content: '';
+    width: 0;
+    height: 0;
+    border-left: 15px solid rgba(255,255,255,0);
+    border-right: 15px solid rgba(255,255,255,0);
+    border-bottom: 15px solid #fff;
+    position: absolute;
+    bottom: -1px;
+    left: calc(50% - 10px);
+    z-index: 100;
+}
+
+footer {
+    margin: -100px auto 0;
+    height: 100px;
+    position: relative;
+    background-color: #888a87;
+}
+
+@media (min-width: 992px) {
+  .container {
+    width: 960px !important;
+  }
+}
