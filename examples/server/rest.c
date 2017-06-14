@@ -58,7 +58,7 @@ static int handler(void *cls, struct MHD_Connection *cn, const char *url,
                    const char *method, const char *version,
                    const char *upload_data, size_t *upload_data_size, void **ptr);
 static int respond_from_buffer(struct MHD_Connection *cn, const char *buffer, size_t buffer_size);
-static int respond_404(struct MHD_Connection *cn);
+static int respond_404(struct MHD_Connection *cn, const char *msg);
 static void output_sensor_value(uint16_t clientID,
                                 lwm2m_uri_t *uri,
                                 int status,
@@ -98,16 +98,16 @@ static int respond_from_buffer(struct MHD_Connection *con, const char *buffer, s
     return ret;
 }
 
-static int respond_404(struct MHD_Connection *con)
+static int respond_404(struct MHD_Connection *con, const char *msg)
 {
     int ret;
     struct MHD_Response *response;
     const char *NOT_FOUND_ERROR = "<html>"
                                   "<head><title>Not found</title></head>"
-                                  "<body>Go away.</body>"
+                                  "<body>%s</body>"
                                   "</html>";
-    response = MHD_create_response_from_buffer(strlen(NOT_FOUND_ERROR),
-                                               (void *)NOT_FOUND_ERROR,
+    char *output = ustring_fmt(NOT_FOUND_ERROR, msg ? msg : "Go away, bitch.");
+    response = MHD_create_response_from_buffer(strlen(output), (void *)output,
                                                MHD_RESPMEM_PERSISTENT);
     ret = MHD_queue_response(con, MHD_HTTP_NOT_FOUND, response);
     MHD_destroy_response(response);
@@ -147,11 +147,11 @@ static int handler(void *cls, struct MHD_Connection *cn, const char *url,
 
     if (strlen(url) == 0)
     {
-        return respond_404(cn);
+        return respond_404(cn, NULL);
     }
     if (url[0] != '/')
     {
-        return respond_404(cn);
+        return respond_404(cn, NULL);
     }
 
     uvector_t *v = ustring_split(url + 1, "/");
@@ -165,9 +165,10 @@ static int handle_url(struct MHD_Connection *cn, const char *url, const uvector_
 {
     if (uvector_is_empty(parsed_url))
     {
-        return respond_404(cn);
+        return respond_404(cn, NULL);
     }
 
+    int ret;
     char *top = G_AS_STR(uvector_get_at(parsed_url, 0));
     size_t url_components = uvector_get_size(parsed_url);
 
@@ -221,18 +222,16 @@ static int handle_url(struct MHD_Connection *cn, const char *url, const uvector_
             }
         }
     }
-    else if (strlen(url))
+    else
     {
-        int ret;
-        char *path = ustring_fmt("%s/%s", "www", url);
+        url = (url[0] == '/' && url[1] == 0) ? "index.html" : url;
+        char *path = ustring_fmt("www/%s", url);
         ugeneric_t g = ufile_read_to_memchunk(path);
         ufree(path);
         if (G_IS_ERROR(g))
         {
-            // ugeneric_error_print(g);
-            // char *err = ugeneric_error_as_str(g);
-            // ret = respond_from_buffer(cn, err, strlen(err));
-            // ufree(err);
+            ugeneric_error_print(g);
+            respond_404(cn, G_AS_STR(g));
             ugeneric_error_destroy(g);
             return ret;
         }
@@ -244,7 +243,7 @@ static int handle_url(struct MHD_Connection *cn, const char *url, const uvector_
         }
     }
 
-    return respond_404(cn);
+    return respond_404(cn, NULL);
 }
 
 static lwm2m_client_t *find_device_by_id(const char *device_id)
@@ -352,7 +351,7 @@ static int get_sensor_value(struct MHD_Connection *cn, const char *device_id, co
     goto found;
 
 not_found:
-    ret = respond_404(cn);
+    ret = respond_404(cn, NULL);
 
 found:
     pthread_mutex_unlock(g_lwm2m_lock);
