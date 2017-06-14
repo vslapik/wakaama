@@ -225,21 +225,21 @@ static int handle_url(struct MHD_Connection *cn, const char *url, const uvector_
     {
         int ret;
         char *path = ustring_fmt("%s/%s", "www", url);
-        ugeneric_t g = ufile_read_to_string(path);
+        ugeneric_t g = ufile_read_to_memchunk(path);
         ufree(path);
         if (G_IS_ERROR(g))
         {
-            ugeneric_error_print(g);
-            char *err = ugeneric_error_as_str(g);
-            ret = respond_from_buffer(cn, err, strlen(err));
-            ufree(err);
+            // ugeneric_error_print(g);
+            // char *err = ugeneric_error_as_str(g);
+            // ret = respond_from_buffer(cn, err, strlen(err));
+            // ufree(err);
             ugeneric_error_destroy(g);
             return ret;
         }
         else
         {
-            char *resp = G_AS_STR(g);
-            ret = respond_from_buffer(cn, resp, strlen(resp));
+            char *resp = G_AS_MEMCHUNK_DATA(g);
+            ret = respond_from_buffer(cn, resp, G_AS_MEMCHUNK_SIZE(g));
             return ret;
         }
     }
