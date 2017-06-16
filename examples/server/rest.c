@@ -346,6 +346,8 @@ static int get_sensor_value(struct MHD_Connection *cn, const char *device_id, co
 
     lwm2m_uri_t uri;
     int ret = MHD_YES;
+    data_consumer_t *dc = NULL;
+    bool lwm2m_locked = false;
 
     char *id = ustring_replace_char(sensor_id, '.', '/');
     printf("%s\n", id);
@@ -354,6 +356,7 @@ static int get_sensor_value(struct MHD_Connection *cn, const char *device_id, co
     if (result == 0) goto not_found;
 
     pthread_mutex_lock(g_lwm2m_lock); //-------------------------------------
+    lwm2m_locked = true;
     lwm2m_client_t *c = find_device_by_id(device_id);
     if (!c) goto not_found;
 
@@ -361,10 +364,12 @@ static int get_sensor_value(struct MHD_Connection *cn, const char *device_id, co
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_sec += 5; // should responde in 5 seconds or error
 
-    data_consumer_t *dc = data_consumer_create();
+    dc = data_consumer_create();
     pthread_mutex_lock(&dc->data_lock);
     result = lwm2m_dm_read(g_lwm2m_ctx, c->internalID, &uri, output_sensor_value, dc);
     pthread_mutex_unlock(g_lwm2m_lock); // -----------------------------------
+    lwm2m_locked = false;
+
     if (result != 0) goto not_found;
 
     while (!dc->data_available)   /* Wait for something to consume */
@@ -393,7 +398,14 @@ not_found:
     ret = respond_404(cn, NULL);
 
 found:
-    data_consumer_destroy(dc);
+    if (dc)
+    {
+        data_consumer_destroy(dc);
+    }
+    if (lwm2m_locked)
+    {
+        pthread_mutex_unlock(g_lwm2m_lock);
+    }
     return ret;
 }
 
