@@ -69,26 +69,6 @@ static const char *status_to_str(int status)
     }
 }
 
-static char *ustring_replace_char(const char *str, char from, char to)
-{
-    char *t, *out = NULL;
-
-    if (str)
-    {
-        t = out = ustring_dup(str);
-        while (*t)
-        {
-            if (*t == from)
-            {
-                *t = to;
-            }
-            t++;
-        }
-    }
-
-    return out;
-}
-
 struct MHD_Daemon *g_httpd;
 lwm2m_context_t *g_lwm2m_ctx;
 pthread_mutex_t *g_lwm2m_lock;
