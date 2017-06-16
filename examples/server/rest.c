@@ -8,6 +8,44 @@
 
 #define CODE_TO_STRING(X)   case X : return #X
 
+typedef struct {
+    pthread_cond_t data_wait;
+    pthread_mutex_t data_lock;
+    bool data_available;
+    void *data;
+    size_t data_size;
+} data_consumer_t;
+
+data_consumer_t *data_consumer_init(void);
+void data_consumer_destroy(data_consumer_t *dc);
+
+data_consumer_t *data_consumer_create(void)
+{
+    data_consumer_t *dc = umalloc(sizeof(data_consumer_t));
+    pthread_mutex_init(&dc->data_lock, NULL);
+    pthread_cond_init(&dc->data_wait, NULL);
+    dc->data_available = false;
+    dc->data = NULL;
+    dc->data_size = 0;
+}
+
+void data_consumer_put_data(data_consumer_t *dc, void *data, size_t data_size)
+{
+    pthread_mutex_lock(&dc->data_lock);
+    dc->data = data;
+    dc->data_size = data_size;
+    dc->data_available = true;
+    pthread_cond_signal(&dc->data_wait);
+    pthread_mutex_unlock(&dc->data_lock);
+}
+
+void data_consumer_destroy(data_consumer_t *dc)
+{
+    pthread_mutex_destroy(&dc->data_lock);
+    pthread_cond_destroy(&dc->data_wait);
+    ufree(dc);
+}
+
 static const char *status_to_str(int status)
 {
     switch(status)
@@ -105,7 +143,7 @@ static int respond_404(struct MHD_Connection *con, const char *msg)
     const char *NOT_FOUND_ERROR = "<html>"
                                   "<head><title>Not found</title></head>"
                                   "<body>%s</body>"
-                                  "</html>";
+                                  "</html>\n";
     char *output = ustring_fmt(NOT_FOUND_ERROR, msg ? msg : "Go away, bitch.");
     response = MHD_create_response_from_buffer(strlen(output), (void *)output,
                                                MHD_RESPMEM_PERSISTENT);
@@ -124,8 +162,8 @@ static int handler(void *cls, struct MHD_Connection *cn, const char *url,
     struct MHD_Response *response;
     int ret;
 
-    if ((0 != strcmp(method, "GET")) &&
-        (0 != strcmp(method, "POST")))
+
+    if ((0 != strcmp(method, "GET")) && (0 != strcmp(method, "POST")))
     {
         return MHD_NO;
     }
@@ -137,6 +175,8 @@ static int handler(void *cls, struct MHD_Connection *cn, const char *url,
         *ptr = &dummy;
         return MHD_YES;
     }
+
+    printf("handling '%s %s'", url, method);
 
     if (0 != *upload_data_size)
     {
@@ -322,7 +362,6 @@ static int get_sensors_list(struct MHD_Connection *cn, const char *device_id)
 
 static int get_sensor_value(struct MHD_Connection *cn, const char *device_id, const char *sensor_id)
 {
-    pthread_mutex_lock(g_lwm2m_lock);
 
     lwm2m_uri_t uri;
     int ret = MHD_YES;
@@ -337,13 +376,25 @@ static int get_sensor_value(struct MHD_Connection *cn, const char *device_id, co
         goto not_found;
     }
 
+    pthread_mutex_lock(g_lwm2m_lock); //-------------------------------------
     lwm2m_client_t *c = find_device_by_id(device_id);
     if (!c)
     {
         goto not_found;
     }
 
-    result = lwm2m_dm_read(g_lwm2m_ctx, c->internalID, &uri, output_sensor_value, cn);
+    data_consumer_t *dc = data_consumer_create();
+    pthread_mutex_lock(&dc->data_lock);
+    result = lwm2m_dm_read(g_lwm2m_ctx, c->internalID, &uri, output_sensor_value, dc);
+    pthread_mutex_unlock(g_lwm2m_lock); // -----------------------------------
+    while (!dc->data_available) {   /* Wait for something to consume */
+        pthread_cond_wait(&dc->data_wait, &dc->data_lock);
+    }
+    pthread_mutex_unlock(&dc->data_lock);
+
+    respond_from_buffer(cn, dc->data, dc->data_size);
+    data_consumer_destroy(dc);
+
     if (result != 0)
     {
         goto not_found;
@@ -354,7 +405,6 @@ not_found:
     ret = respond_404(cn, NULL);
 
 found:
-    pthread_mutex_unlock(g_lwm2m_lock);
     return ret;
 }
 
@@ -371,19 +421,19 @@ static void output_sensor_value(uint16_t clientID,
                                 int status,
                                 lwm2m_media_type_t fmt,
                                 uint8_t *data,
-                                int dataLength,
-                                void *userData)
+                                int data_size,
+                                void *user_data)
 {
-    struct MHD_Connection *cn = userData;
+    data_consumer_t *dc = user_data;
 
-    if (status != COAP_NO_ERROR)
+    if (status != COAP_205_CONTENT)
     {
         const char *err = status_to_str(status);
-        respond_from_buffer(cn, err, strlen(err));
-        return;
+        data_consumer_put_data(dc, (void *)err, strlen(err));
     }
-
-    UASSERT(fmt == LWM2M_CONTENT_JSON);
-    respond_from_buffer(cn, data, dataLength);
+    else
+    {
+        UASSERT(fmt == LWM2M_CONTENT_JSON);
+        data_consumer_put_data(dc, data, data_size);
+    }
 }
-
