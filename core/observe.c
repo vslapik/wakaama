@@ -259,6 +259,7 @@ void observe_cancel(lwm2m_context_t * contextP,
         }
         if (targetP != NULL)
         {
+            if (targetP->parameters != NULL) lwm2m_free(targetP->parameters);
             lwm2m_free(targetP);
             if (observedP->watcherList == NULL)
             {
@@ -504,11 +505,19 @@ void observe_step(lwm2m_context_t * contextP,
             switch (dataP->type)
             {
             case LWM2M_TYPE_INTEGER:
-                if (1 != lwm2m_data_decode_int(dataP, &integerValue)) continue;
+                if (1 != lwm2m_data_decode_int(dataP, &integerValue))
+                {
+                    lwm2m_data_free(size, dataP);
+                    continue;
+                }
                 storeValue = true;
                 break;
             case LWM2M_TYPE_FLOAT:
-                if (1 != lwm2m_data_decode_float(dataP, &floatValue)) continue;
+                if (1 != lwm2m_data_decode_float(dataP, &floatValue))
+                {
+                    lwm2m_data_free(size, dataP);
+                    continue;
+                }
                 storeValue = true;
                 break;
             default:
@@ -539,8 +548,8 @@ void observe_step(lwm2m_context_t * contextP,
                     {
                         if ((watcherP->parameters->toSet & LWM2M_ATTR_FLAG_LESS_THAN) != 0)
                         {
-                            LOG("Checking lower treshold");
-                            // Did we cross the lower treshold ?
+                            LOG("Checking lower threshold");
+                            // Did we cross the lower threshold ?
                             switch (dataP->type)
                             {
                             case LWM2M_TYPE_INTEGER:
@@ -549,7 +558,7 @@ void observe_step(lwm2m_context_t * contextP,
                                  || (integerValue >= watcherP->parameters->lessThan
                                   && watcherP->lastValue.asInteger < watcherP->parameters->lessThan))
                                 {
-                                    LOG("Notify on lower treshold crossing");
+                                    LOG("Notify on lower threshold crossing");
                                     notify = true;
                                 }
                                 break;
@@ -559,7 +568,7 @@ void observe_step(lwm2m_context_t * contextP,
                                  || (floatValue >= watcherP->parameters->lessThan
                                   && watcherP->lastValue.asFloat < watcherP->parameters->lessThan))
                                 {
-                                    LOG("Notify on lower treshold crossing");
+                                    LOG("Notify on lower threshold crossing");
                                     notify = true;
                                 }
                                 break;
@@ -569,8 +578,8 @@ void observe_step(lwm2m_context_t * contextP,
                         }
                         if ((watcherP->parameters->toSet & LWM2M_ATTR_FLAG_GREATER_THAN) != 0)
                         {
-                            LOG("Checking upper treshold");
-                            // Did we cross the upper treshold ?
+                            LOG("Checking upper threshold");
+                            // Did we cross the upper threshold ?
                             switch (dataP->type)
                             {
                             case LWM2M_TYPE_INTEGER:
@@ -912,6 +921,8 @@ int lwm2m_observe(lwm2m_context_t * contextP,
         observationP->id = lwm2m_list_newId((lwm2m_list_t *)clientP->observationList);
         memcpy(&observationP->uri, uriP, sizeof(lwm2m_uri_t));
         observationP->clientP = clientP;
+
+        observationP->clientP->observationList = (lwm2m_observation_t *)LWM2M_LIST_ADD(observationP->clientP->observationList, observationP);
     }
     observationP->status = STATE_REG_PENDING;
     observationP->callback = callback;
@@ -925,11 +936,10 @@ int lwm2m_observe(lwm2m_context_t * contextP,
     transactionP = transaction_new(clientP->sessionH, COAP_GET, clientP->altPath, uriP, contextP->nextMID++, 4, token);
     if (transactionP == NULL)
     {
+        observationP->clientP->observationList = (lwm2m_observation_t *)LWM2M_LIST_RM(observationP->clientP->observationList, observationP->id, NULL);
         lwm2m_free(observationP);
         return COAP_500_INTERNAL_SERVER_ERROR;
     }
-
-    observationP->clientP->observationList = (lwm2m_observation_t *)LWM2M_LIST_ADD(observationP->clientP->observationList, observationP);
 
     coap_set_header_observe(transactionP->message, 0);
     if (clientP->supportJSON == true)
