@@ -91,9 +91,10 @@
 
 #define COAP_MAX_PACKET_SIZE  (COAP_MAX_HEADER_SIZE + REST_MAX_CHUNK_SIZE)
 /*                                        0/14          48 for IPv6 (28 for IPv4) */
-#if COAP_MAX_PACKET_SIZE > (UIP_BUFSIZE - UIP_LLH_LEN - UIP_IPUDPH_LEN)
+/* @vs: check these constants meaning, commenting out as for now */
+//#if COAP_MAX_PACKET_SIZE > (UIP_BUFSIZE - UIP_LLH_LEN - UIP_IPUDPH_LEN)
 //#error "UIP_CONF_BUFFER_SIZE too small for REST_MAX_CHUNK_SIZE"
-#endif
+//#endif
 
 
 /* Bitmap for set options */
