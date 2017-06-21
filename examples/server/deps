@@ -1,0 +1,1 @@
+cmake libsqlite3-dev libmicrohttpd-dev
