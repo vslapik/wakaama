@@ -157,7 +157,7 @@ static int handler(void *cls, struct MHD_Connection *cn, const char *url,
         return MHD_YES;
     }
 
-    printf("handling '%s %s'", url, method);
+    printf("handling '%s %s'\n", method, url);
 
     if (0 != *upload_data_size)
     {
