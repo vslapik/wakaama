@@ -12,6 +12,7 @@
 typedef struct {
     pthread_cond_t data_wait;
     pthread_mutex_t data_lock;
+    struct timespec timeout;
     bool data_available;
     void *data;
     size_t data_size;
@@ -20,7 +21,11 @@ typedef struct {
 data_consumer_t *data_consumer_init(void);
 void data_consumer_destroy(data_consumer_t *dc);
 
-data_consumer_t *data_consumer_create(void)
+static void read_callback(uint16_t clientID, lwm2m_uri_t *uri,
+                          int status, lwm2m_media_type_t fmt,
+                          uint8_t *data, int data_size, void *user_data);
+
+data_consumer_t *data_consumer_create(struct timespec timeout)
 {
     data_consumer_t *dc = umalloc(sizeof(data_consumer_t));
     pthread_mutex_init(&dc->data_lock, NULL);
@@ -28,6 +33,9 @@ data_consumer_t *data_consumer_create(void)
     dc->data_available = false;
     dc->data = NULL;
     dc->data_size = 0;
+    dc->timeout = timeout;
+
+    return dc;
 }
 
 void data_consumer_put_data(data_consumer_t *dc, void *data, size_t data_size)
@@ -37,6 +45,25 @@ void data_consumer_put_data(data_consumer_t *dc, void *data, size_t data_size)
     dc->data_size = data_size;
     dc->data_available = true;
     pthread_cond_signal(&dc->data_wait);
+    pthread_mutex_unlock(&dc->data_lock);
+}
+
+void data_consumer_wait_for_data(data_consumer_t *dc)
+{
+    struct timespec till;
+    clock_gettime(CLOCK_REALTIME, &till);
+    till.tv_sec += dc->timeout.tv_sec;
+    till.tv_nsec += dc->timeout.tv_nsec;
+
+    pthread_mutex_lock(&dc->data_lock);
+    while (!dc->data_available)
+    {
+        int ret = pthread_cond_timedwait(&dc->data_wait, &dc->data_lock, &till);
+        if (ret == ETIMEDOUT)
+        {
+            UABORT("wait failed"); // made fatal by now, may return error code later
+        }
+    }
     pthread_mutex_unlock(&dc->data_lock);
 }
 
@@ -99,6 +126,11 @@ void start_httpd(int port, lwm2m_context_t *lwm2m_ctx, pthread_mutex_t *lwm2m_lo
     printf("microhttpd started on port %d\n", port);
 }
 
+void stop_httpd(void)
+{
+    MHD_stop_daemon(g_httpd);
+}
+
 static int handle_url(struct MHD_Connection *cn, const char *url, const uvector_t *parsed_url, const char *method);
 static int get_devices_list(struct MHD_Connection *cn);
 static int get_device_info(struct MHD_Connection *cn, const char *device_id);
@@ -128,9 +160,10 @@ static int respond_404(struct MHD_Connection *con, const char *msg)
                                   "</html>\n";
     char *output = ustring_fmt(NOT_FOUND_ERROR, msg ? msg : "Go away, bitch.");
     response = MHD_create_response_from_buffer(strlen(output), (void *)output,
-                                               MHD_RESPMEM_PERSISTENT);
+                                               MHD_RESPMEM_MUST_COPY);
     ret = MHD_queue_response(con, MHD_HTTP_NOT_FOUND, response);
     MHD_destroy_response(response);
+    ufree(output);
 
     return ret;
 }
@@ -298,6 +331,7 @@ static int get_devices_list(struct MHD_Connection *cn)
     char *str = udict_as_str(td);
     int ret = respond_from_buffer(cn, str, strlen(str));
     udict_destroy(td);
+    ufree(str);
 
     pthread_mutex_unlock(g_lwm2m_lock);
     return ret;
@@ -305,32 +339,39 @@ static int get_devices_list(struct MHD_Connection *cn)
 
 static int get_sensors_list(struct MHD_Connection *cn, const char *device_id)
 {
-    printf("Getting sensors list for %s\n", device_id);
-    pthread_mutex_lock(g_lwm2m_lock);
 
+    printf("Getting sensors list for %s\n", device_id);
+
+    pthread_mutex_lock(g_lwm2m_lock);
     lwm2m_client_t *c = find_device_by_id(device_id);
+    pthread_mutex_unlock(g_lwm2m_lock);
+
+    if (!c)
+    {
+        return respond_404(cn, NULL);
+    }
+
     udict_t *d = udict_create();
     uvector_t *sensors = uvector_create();
-
-    if (c)
+    pthread_mutex_lock(g_lwm2m_lock);
+    for (lwm2m_client_object_t *obj = c->objectList; obj; obj = obj->next)
     {
-        for (lwm2m_client_object_t *obj = c->objectList; obj; obj = obj->next)
+        if (obj->instanceList == NULL)
         {
-            if (obj->instanceList == NULL)
+            //fprintf(stdout, "/%d, ", obj->id);
+            //uvector_append(sensors, obj->id);
+        }
+        else
+        {
+            lwm2m_list_t *inst;
+            for (inst = obj->instanceList; inst; inst = inst->next)
             {
-                //fprintf(stdout, "/%d, ", obj->id);
-                //uvector_append(sensors, obj->id);
-            }
-            else
-            {
-                lwm2m_list_t *inst;
-                for (inst = obj->instanceList; inst; inst = inst->next)
-                {
-                    uvector_append(sensors, G_STR(ustring_fmt(".%d.%d", obj->id, inst->id)));
-                }
+                uvector_append(sensors, G_STR(ustring_fmt(".%d.%d", obj->id, inst->id)));
             }
         }
     }
+    pthread_mutex_unlock(g_lwm2m_lock);
+
     udict_put(d, G_CSTR("data"), G_VECTOR(sensors));
 
     char *str = udict_as_str(d);
@@ -342,132 +383,133 @@ static int get_sensors_list(struct MHD_Connection *cn, const char *device_id)
     return ret;
 }
 
-static int get_sensor_value(struct MHD_Connection *cn, const char *device_id, const char *sensor_id)
+int lwm2m_read(const char *device_id, const char *sensor_id, lwm2m_context_t *lwm2m_ctx, char **data, size_t *data_size)
 {
     lwm2m_uri_t uri;
-    int ret = MHD_YES;
     data_consumer_t *dc = NULL;
-    bool lwm2m_locked = false;
+    char *id = NULL;
+    int ret = 0;
 
-    char *id = ustring_replace_char(sensor_id, '.', '/');
-    printf("%s\n", id);
-    int result = lwm2m_stringToUri(id, strlen(id), &uri);
-    ufree(id);
-    if (result == 0) goto not_found;
+    id = ustring_replace_char(sensor_id, '.', '/');
+    if (lwm2m_stringToUri(id, strlen(id), &uri) == 0)
+    {
+        ret = 1;
+        goto not_found;
+    }
 
-    pthread_mutex_lock(g_lwm2m_lock); //-------------------------------------
-    lwm2m_locked = true;
+    pthread_mutex_lock(g_lwm2m_lock); //---------------------------------------
     lwm2m_client_t *c = find_device_by_id(device_id);
-    if (!c) goto not_found;
+    pthread_mutex_unlock(g_lwm2m_lock); // ------------------------------------
 
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_sec += 5; // should responde in 5 seconds or error
-
-    dc = data_consumer_create();
-    pthread_mutex_lock(&dc->data_lock);
-    result = lwm2m_dm_read(g_lwm2m_ctx, c->internalID, &uri, output_sensor_value, dc);
-    pthread_mutex_unlock(g_lwm2m_lock); // -----------------------------------
-    lwm2m_locked = false;
-
-    if (result != 0) goto not_found;
-
-    while (!dc->data_available)   /* Wait for something to consume */
+    if (!c)
     {
-        int ret = pthread_cond_timedwait(&dc->data_wait, &dc->data_lock, &ts);
-        if (ret == ETIMEDOUT)
-        {
-            printf("the thing is not going to respond\n");
-            goto not_found;
-        }
+        ret = 1;
+        goto not_found;
     }
 
-    if (dc->data)
-    {
-        respond_from_buffer(cn, dc->data, dc->data_size);
-        ufree(dc->data);
-    }
-    else
+    dc = data_consumer_create((struct timespec){.tv_sec = 5, .tv_nsec = 0});
+
+    pthread_mutex_lock(g_lwm2m_lock); //---------------------------------------
+    ret = lwm2m_dm_read(g_lwm2m_ctx, c->internalID, &uri, read_callback, dc);
+    pthread_mutex_unlock(g_lwm2m_lock); // ------------------------------------
+
+    if (ret != 0)
     {
         goto not_found;
     }
 
-    goto found;
+    data_consumer_wait_for_data(dc);
+
+    if (dc->data)
+    {
+        *data = dc->data;
+        *data_size = dc->data_size;
+    }
+    else
+    {
+        ret = 1;
+        goto not_found;
+    }
 
 not_found:
-    ret = respond_404(cn, NULL);
-
-found:
     if (dc)
     {
         data_consumer_destroy(dc);
     }
-    if (lwm2m_locked)
+    if (id)
     {
-        pthread_mutex_unlock(g_lwm2m_lock);
+        ufree(id);
     }
+
     return ret;
 }
 
-void stop_httpd(void)
+static int get_sensor_value(struct MHD_Connection *cn, const char *device_id, const char *sensor_id)
 {
-    MHD_stop_daemon(g_httpd);
+    char *response = NULL;
+    size_t response_size = 0;
+    int ret = 0;
+
+    if (lwm2m_read(device_id, sensor_id, g_lwm2m_ctx, &response, &response_size) != 0)
+    {
+        return respond_404(cn, NULL);
+    }
+    if (response_size == 0)
+    {
+        return respond_404(cn, NULL);
+    }
+
+    ugeneric_t g = ugeneric_parse(response);
+    ufree(response);
+
+    if (G_IS_ERROR(g))
+    {
+        ugeneric_error_print(g);
+        respond_from_buffer(cn, G_AS_STR(g), strlen(G_AS_STR(g)));
+        ugeneric_error_destroy(g);
+        goto invalid_json;
+    }
+
+    ugeneric_print(g, NULL);
+    ugeneric_t e = udict_get(G_AS_PTR(g), G_STR("e"), G_NULL);
+    if (G_IS_NULL(e) || !G_IS_VECTOR(e) || (uvector_get_size(G_AS_PTR(e)) != 1))
+    {
+        goto invalid_json;
+    }
+
+    ugeneric_t vd = uvector_get_at(G_AS_PTR(e), 0);
+    if (!G_IS_DICT(vd))
+    {
+        goto invalid_json;
+    }
+
+    ugeneric_t v = udict_get(G_AS_PTR(vd), G_STR("v"), G_NULL);
+    if (G_IS_NULL(v))
+    {
+        goto invalid_json;
+    }
+
+    size_t sample_size;
+    char *sample = ustring_fmt_sized("{\"data\": {\"type\": \"type\", \"value\": \"%d\"}}", &sample_size, G_AS_INT(v));
+    ret = respond_from_buffer(cn, sample, sample_size);
+    ufree(sample);
+    ugeneric_destroy(g, NULL);
+    return ret;
+
+invalid_json:
+    ugeneric_destroy(g, NULL);
+    fprintf(stderr, "invalid response");
+    return respond_404(cn, NULL);
 }
 
-/*
- * Executed in context of lwm2m_step, already locked.
- */
-static void output_sensor_value(uint16_t clientID,
-                                lwm2m_uri_t *uri,
-                                int status,
-                                lwm2m_media_type_t fmt,
-                                uint8_t *data,
-                                int data_size,
-                                void *user_data)
+
+static void read_callback(uint16_t clientID, lwm2m_uri_t *uri,
+                          int status, lwm2m_media_type_t fmt,
+                          uint8_t *data, int data_size, void *user_data)
 {
     data_consumer_t *dc = user_data;
 
-    if (status != COAP_205_CONTENT)
-    {
-        const char *err = status_to_str(status);
-        data_consumer_put_data(dc, (void *)err, strlen(err));
-    }
-    else
-    {
-        UASSERT(fmt == LWM2M_CONTENT_JSON);
-        char *json = ustring_ndup(data, data_size);
-        ugeneric_t g = ugeneric_parse(json);
-        ufree(json);
-        if (G_IS_ERROR(g))
-        {
-
-            ugeneric_error_print(g);
-            data_consumer_put_data(dc, G_AS_STR(g), strlen(G_AS_STR(g)));
-            ugeneric_error_destroy(g);
-        }
-        else
-        {
-            //{"bn": "/2/0/1/", "e": [{"v": 0, "n": "1"}]}
-            ugeneric_print(g, NULL);
-            ugeneric_t e = udict_get(G_AS_PTR(g), G_STR("e"), G_NULL);
-            if (G_IS_NULL(e)) goto fmt_error;
-            if (!G_IS_VECTOR(e)) goto fmt_error;
-            if (uvector_get_size(G_AS_PTR(e)) != 1) goto fmt_error;
-
-            ugeneric_t vd = uvector_get_at(G_AS_PTR(e), 0);
-            if (!G_IS_DICT(vd)) goto fmt_error;
-
-            ugeneric_t v = udict_get(G_AS_PTR(vd), G_STR("v"), G_NULL);
-            if (G_IS_NULL(v)) goto fmt_error;
-
-            char *sample = ustring_fmt("{\"data\": {\"type\": \"type\", \"value\": \"%d\"}}", G_AS_INT(v));
-            data_consumer_put_data(dc, sample, strlen(sample));
-
-            ugeneric_destroy(g, NULL);
-            return;
-        }
-    }
-
-fmt_error:
-    data_consumer_put_data(dc, NULL, 0);
+    UASSERT(status == COAP_205_CONTENT);
+    UASSERT(fmt == LWM2M_CONTENT_JSON);
+    data_consumer_put_data(dc, ustring_ndup(data, data_size), data_size); // umemdup() ?
 }
