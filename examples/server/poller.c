@@ -14,21 +14,29 @@ typedef struct {
 
 poller_cfg_t poller_cfg;
 
-void *poll_sensors(void *data) {
+void *poll_sensors(void *data)
+{
+    struct timeval timeout;
     poller_cfg_t *cfg = data;
     fd_set set;
     int ret;
 
-    FD_ZERO(&set);
-    FD_SET(cfg->terminate_read_fd, &set);
-
     for (;;)
     {
-        ret = select(FD_SETSIZE, &set, NULL, NULL, &cfg->timeout);
-        UASSERT_PERROR(ret != -1);
-        if (ret == 1)
+        // poll data here
+
+        // must re-setup all select() params for each call
+        FD_ZERO(&set);
+        FD_SET(cfg->terminate_read_fd, &set);
+        timeout = cfg->timeout;
+        ret = select(cfg->terminate_read_fd + 1, &set, NULL, NULL, &timeout);
+        if (ret != 0) // 0 means timeout expired
         {
-            break;
+            UASSERT_PERROR(ret != -1); // error
+            if (ret == 1) // some data appeared in the channedl, just exit
+            {
+                break;
+            }
         }
     }
 }
