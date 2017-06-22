@@ -86,16 +86,17 @@ static void output_sensor_value(uint16_t clientID,
                                 int dataLength,
                                 void *userData);
 
-void start_httpd(lwm2m_context_t *lwm2m_ctx, pthread_mutex_t *lwm2m_lock)
+void start_httpd(int port, lwm2m_context_t *lwm2m_ctx, pthread_mutex_t *lwm2m_lock)
 {
     UASSERT(lwm2m_ctx);
     g_lwm2m_ctx = lwm2m_ctx;
     g_lwm2m_lock = lwm2m_lock;
 
     g_httpd = MHD_start_daemon(MHD_USE_THREAD_PER_CONNECTION,
-            8888, NULL, NULL, &handler, NULL,
+            port, NULL, NULL, &handler, NULL,
             MHD_OPTION_END);
     UASSERT(g_httpd);
+    printf("microhttpd started on port %d\n", port);
 }
 
 static int handle_url(struct MHD_Connection *cn, const char *url, const uvector_t *parsed_url, const char *method);
@@ -343,7 +344,6 @@ static int get_sensors_list(struct MHD_Connection *cn, const char *device_id)
 
 static int get_sensor_value(struct MHD_Connection *cn, const char *device_id, const char *sensor_id)
 {
-
     lwm2m_uri_t uri;
     int ret = MHD_YES;
     data_consumer_t *dc = NULL;

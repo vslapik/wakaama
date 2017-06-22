@@ -20,6 +20,7 @@ SET(SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/lwm2mserver.c
     ${CMAKE_CURRENT_LIST_DIR}/db.c
     ${CMAKE_CURRENT_LIST_DIR}/rest.c
+    ${CMAKE_CURRENT_LIST_DIR}/poller.c
     )
 
 SET(CMAKE_C_FLAGS "-O0 -g")
@@ -41,7 +42,7 @@ include_directories(ugeneric)
 target_compile_definitions(ugeneric PRIVATE ENABLE_UASSERT_INPUT)
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${WAKAAMA_SOURCES} ${SHARED_SOURCES})
-target_link_libraries(lwm2mserver microhttpd sqlite3 ugeneric)
+target_link_libraries(lwm2mserver microhttpd sqlite3 ugeneric pthread)
 
 
 # Add WITH_LOGS to debug variant

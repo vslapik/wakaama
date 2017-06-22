@@ -74,16 +74,18 @@
 
 #include "commandline.h"
 #include "connection.h"
-#include "db.h"
-#include "rest.h"
 
 #include <microhttpd.h>
+#include <ugeneric.h>
+#include "db.h"
+#include "rest.h"
+#include "poller.h"
 
 #define MAX_PACKET_SIZE 1024
 
 #define DB_PATH "lwm2m.db"
 
-static int g_quit = 0;
+volatile sig_atomic_t g_quit = 0;
 
 static void prv_print_error(uint8_t status)
 {
@@ -1004,9 +1006,16 @@ int main(int argc, char *argv[])
 
     lwm2m_set_monitoring_callback(lwm2mH, prv_monitor_callback, lwm2mH);
 
+    /* httpd */
     pthread_mutex_t lwm2m_lock;
     pthread_mutex_init(&lwm2m_lock, NULL);
-    start_httpd(lwm2mH, &lwm2m_lock);
+    start_httpd(8888, lwm2mH, &lwm2m_lock); /* TODO: pass port via cli */
+
+    /* poller */
+    uvector_t *sensors = uvector_create();
+    uvector_append(sensors, G_CSTR(".1.0.1"));
+    uvector_append(sensors, G_CSTR(".1.0.2"));
+    start_poller(sensors, db, &lwm2m_lock, 5); /* TODO: pass interval via cli */
 
     while (0 == g_quit)
     {
@@ -1116,8 +1125,10 @@ int main(int argc, char *argv[])
         }
     }
 
+    stop_poller();
     stop_httpd();
     sqlite3_close(db);
+    uvector_destroy(sensors);
 
     lwm2m_close(lwm2mH);
     close(sock);
