@@ -1,6 +1,8 @@
 #include <pthread.h>
 #include <unistd.h>
+#include <time.h>
 #include "poller.h"
+#include "db.h"
 #include "glue.h"
 
 typedef struct {
@@ -15,6 +17,44 @@ typedef struct {
 } poller_cfg_t;
 static poller_cfg_t g_poller_cfg;
 
+static char *extract_sample(const char *data, size_t data_size)
+{
+    ugeneric_t g = ugeneric_parse(data);
+
+    if (G_IS_ERROR(g))
+    {
+        ugeneric_error_print(g);
+        ugeneric_error_destroy(g);
+        return NULL;
+    }
+
+    ugeneric_t e = udict_get(G_AS_PTR(g), G_STR("e"), G_NULL);
+    if (G_IS_NULL(e) || !G_IS_VECTOR(e) || (uvector_get_size(G_AS_PTR(e)) != 1))
+    {
+        goto invalid_json;
+    }
+
+    ugeneric_t vd = uvector_get_at(G_AS_PTR(e), 0);
+    if (!G_IS_DICT(vd))
+    {
+        goto invalid_json;
+    }
+
+    ugeneric_t v = udict_get(G_AS_PTR(vd), G_STR("v"), G_NULL);
+    if (G_IS_NULL(v))
+    {
+        goto invalid_json;
+    }
+
+    char *sample = ugeneric_as_str(v, NULL);
+    ugeneric_destroy(g, NULL);
+    return sample;
+
+invalid_json:
+    ugeneric_destroy(g, NULL);
+    return NULL;
+}
+
 static void poll_sensors(poller_cfg_t *cfg)
 {
     uvector_t *devices = lwm2m_get_devices(cfg->lwm2m_ctx, cfg->lwm2m_lock);
@@ -27,6 +67,8 @@ static void poll_sensors(poller_cfg_t *cfg)
     {
         for (size_t j = 0; j < ssize; j++)
         {
+            save_sensor(cfg->db, G_AS_STR(d[i]), G_AS_STR(s[i]), "TBD[name]", "TBD[unit]");
+
             char *response;
             size_t response_size;
             printf("poll %s/%s\n", G_AS_STR(d[i]), G_AS_STR(s[j]));
@@ -34,13 +76,18 @@ static void poll_sensors(poller_cfg_t *cfg)
             {
                 if (response_size)
                 {
-                    // consume data
+                    char *sample = extract_sample(response, response_size);
+                    if (sample)
+                    {
+                        insert_sample(cfg->db, G_AS_STR(d[i]), G_AS_STR(s[j]), sample, time(NULL));
+                        ufree(sample);
+                    }
                     ufree(response);
                 }
             }
             else
             {
-                // don't care, if there is anythin to consume we consume, it not - bail out
+                // don't care, if there is anything to consume we consume, it not - bail out
             }
         }
     }

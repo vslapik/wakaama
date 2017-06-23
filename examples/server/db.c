@@ -14,14 +14,18 @@ void create_tables(sqlite3 *db)
     sql = "DROP TABLE IF EXISTS sensors;"
           "DROP TABLE IF EXISTS samples;"
           "CREATE TABLE sensors("
-              "sensor_id INT PRIMARY KEY NOT NULL,"
+              "device_id TEXT NOT NULL,"
+              "sensor_id TEXT NOT NULL,"
               "name TEXT NOT NULL,"
-              "unit TEXT);"
+              "unit TEXT,"
+              "UNIQUE(device_id, sensor_id)"
+              "PRIMARY KEY (device_id, sensor_id));"
           "CREATE TABLE samples("
-              "sensor_id INT,"
-              "sample REAL,"
+              "device_id TEXT NOT NULL,"
+              "sensor_id TEXT NOT NULL,"
+              "sample TEXT NOT NULL,"
               "timestamp TIME,"
-              "FOREIGN KEY (sensor_id) REFERENCES sensors(sensor_id));";
+              "FOREIGN KEY (device_id, sensor_id) REFERENCES sensors(device_id, sensor_id));";
 
     rc = sqlite3_exec(db, sql, 0, 0, &err_msg);
     if (rc != SQLITE_OK)
@@ -32,15 +36,15 @@ void create_tables(sqlite3 *db)
     }
 }
 
-void insert_sensor(sqlite3 *db, int sensor_id, const char *name, const char *unit)
+void save_sensor(sqlite3 *db, const char *device_id, const char *sensor_id, const char *name, const char *unit)
 {
     const char *sql_fmt;
     char *sql;
     int rc;
     char *err_msg;
 
-    sql_fmt = "INSERT INTO sensors VALUES(%d, '%s', '%s');";
-    rc = asprintf(&sql, sql_fmt, sensor_id, name, unit);
+    sql_fmt = "INSERT OR IGNORE INTO sensors VALUES('%s', '%s', '%s', '%s');";
+    rc = asprintf(&sql, sql_fmt, device_id, sensor_id, name, unit);
     if (rc == -1)
     {
         abort();
@@ -57,15 +61,15 @@ void insert_sensor(sqlite3 *db, int sensor_id, const char *name, const char *uni
     }
 }
 
-void insert_sample(sqlite3 *db, int sensor_id, double sample, time_t ts)
+void insert_sample(sqlite3 *db, const char *device_id, const char *sensor_id, const char *sample, time_t ts)
 {
     const char *sql_fmt;
     char *sql;
     int rc;
     char *err_msg;
 
-    sql_fmt = "INSERT INTO samples VALUES(%d, %f, %ld);";
-    rc = asprintf(&sql, sql_fmt, sensor_id, sample, ts);
+    sql_fmt = "INSERT INTO samples VALUES('%s', '%s', '%s', %ld);";
+    rc = asprintf(&sql, sql_fmt, device_id, sensor_id, sample, ts);
     if (rc == -1)
     {
         abort();
@@ -82,7 +86,7 @@ void insert_sample(sqlite3 *db, int sensor_id, double sample, time_t ts)
     }
 }
 
-char *get_samples(sqlite3 *db, int sensor_id, time_t from, time_t to)
+char *get_samples(sqlite3 *db, const char *device_id, const char *sensor_id, time_t from, time_t to)
 {
     const char *sql_fmt;
     char *sql;
@@ -93,8 +97,8 @@ char *get_samples(sqlite3 *db, int sensor_id, time_t from, time_t to)
     int i;
     int row = 0;
 
-    sql_fmt = "SELECT * FROM samples where sensor_id = %d and timestamp >= %lld and timestamp <= %lld";
-    rc = asprintf(&sql, sql_fmt, sensor_id, from, to);
+    sql_fmt = "SELECT * FROM samples where device_id = '%s' and sensor_id = '%s' and timestamp >= %lld and timestamp <= %lld";
+    rc = asprintf(&sql, sql_fmt, device_id, sensor_id, from, to);
     if (rc == -1)
     {
         abort();
@@ -113,7 +117,7 @@ char *get_samples(sqlite3 *db, int sensor_id, time_t from, time_t to)
             int bytes;
             const unsigned char * text;
             bytes = sqlite3_column_bytes (stmt, 0);
-            text  = sqlite3_column_text (stmt, 0);
+            text  = sqlite3_column_text (stmt, 2);
             printf ("%d: %s\n", row, text);
             row++;
         }

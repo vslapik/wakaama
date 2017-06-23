@@ -974,12 +974,12 @@ int main(int argc, char *argv[])
 
     if (mock_db)
     {
-        insert_sensor(db, 42, "temperature", "C");
+        save_sensor(db, "dummy_device", "dummy_sensor", "temperature", "C");
         for (int i = 0; i < 10; i++)
         {
-            insert_sample(db, 42, 33.3, i);
+            insert_sample(db, "dummy_device", "dummy_sensor", "33.3", i);
         }
-        get_samples(db, 42, 0, 100);
+        get_samples(db, "dummy_device", "dummy_sensor", 0, 100);
     }
 
     sock = create_socket(localPort, addressFamily);
