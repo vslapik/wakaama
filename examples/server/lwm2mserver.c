@@ -1015,7 +1015,7 @@ int main(int argc, char *argv[])
     uvector_t *sensors = uvector_create();
     uvector_append(sensors, G_CSTR(".1.0.1"));
     uvector_append(sensors, G_CSTR(".1.0.2"));
-    start_poller(sensors, db, &lwm2m_lock, 5); /* TODO: pass interval via cli */
+    start_poller(sensors, db, lwm2mH, &lwm2m_lock, 5); /* TODO: pass interval via cli */
 
     while (0 == g_quit)
     {

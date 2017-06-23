@@ -21,6 +21,7 @@ SET(SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/db.c
     ${CMAKE_CURRENT_LIST_DIR}/rest.c
     ${CMAKE_CURRENT_LIST_DIR}/poller.c
+    ${CMAKE_CURRENT_LIST_DIR}/glue.c
     )
 
 SET(CMAKE_C_FLAGS "-O0 -g")
