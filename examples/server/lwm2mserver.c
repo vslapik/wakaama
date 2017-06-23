@@ -1009,7 +1009,7 @@ int main(int argc, char *argv[])
     /* httpd */
     pthread_mutex_t lwm2m_lock;
     pthread_mutex_init(&lwm2m_lock, NULL);
-    start_httpd(8888, lwm2mH, &lwm2m_lock); /* TODO: pass port via cli */
+    start_httpd(8888, lwm2mH, &lwm2m_lock, db); /* TODO: pass port via cli */
 
     /* poller */
     uvector_t *sensors = uvector_create();

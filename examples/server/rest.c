@@ -40,6 +40,7 @@ static const char *status_to_str(int status)
 struct MHD_Daemon *g_httpd;
 lwm2m_context_t *g_lwm2m_ctx;
 pthread_mutex_t *g_lwm2m_lock;
+sqlite3 *g_db;
 
 static int handler(void *cls, struct MHD_Connection *cn, const char *url,
                    const char *method, const char *version,
@@ -47,11 +48,12 @@ static int handler(void *cls, struct MHD_Connection *cn, const char *url,
 static int respond_from_buffer(struct MHD_Connection *cn, const char *buffer, size_t buffer_size);
 static int respond_404(struct MHD_Connection *cn, const char *msg);
 
-void start_httpd(int port, lwm2m_context_t *lwm2m_ctx, pthread_mutex_t *lwm2m_lock)
+void start_httpd(int port, lwm2m_context_t *lwm2m_ctx, pthread_mutex_t *lwm2m_lock, sqlite3 *db)
 {
     UASSERT(lwm2m_ctx);
     g_lwm2m_ctx = lwm2m_ctx;
     g_lwm2m_lock = lwm2m_lock;
+    g_db = db;
 
     g_httpd = MHD_start_daemon(MHD_USE_THREAD_PER_CONNECTION,
             port, NULL, NULL, &handler, NULL,
@@ -70,6 +72,7 @@ static int get_devices_list(struct MHD_Connection *cn);
 static int get_device_info(struct MHD_Connection *cn, const char *device_id);
 static int get_sensors_list(struct MHD_Connection *cn, const char *device_id);
 static int get_sensor_value(struct MHD_Connection *cn, const char *device_id, const char *sensor_id);
+static int get_sensor_statistics(struct MHD_Connection *cn, const char *device_id, const char *sensor_id);
 
 static int respond_from_buffer(struct MHD_Connection *con, const char *buffer, size_t buffer_size)
 {
@@ -203,9 +206,9 @@ static int handle_url(struct MHD_Connection *cn, const char *url, const uvector_
                         // set sensor value
                     }
                 }
-                else if (strcmp(t, "stat"))
+                else if (strcmp(t, "stat") == 0)
                 {
-                    // return stat
+                    return get_sensor_statistics(cn, device_id, sensor_id);
                 }
             }
         }
@@ -236,13 +239,14 @@ static int handle_url(struct MHD_Connection *cn, const char *url, const uvector_
 
 static int get_devices_list(struct MHD_Connection *cn)
 {
+    int ret = 0;
     udict_t *td = udict_create();
     uvector_t *v = lwm2m_get_devices(g_lwm2m_ctx, g_lwm2m_lock);
 
     udict_put(td, G_CSTR("data"), G_VECTOR(v));
 
     char *str = udict_as_str(td);
-    int ret = respond_from_buffer(cn, str, strlen(str));
+    ret = respond_from_buffer(cn, str, strlen(str));
     udict_destroy(td);
     ufree(str);
 
@@ -314,7 +318,7 @@ static int get_sensor_value(struct MHD_Connection *cn, const char *device_id, co
     if (G_IS_ERROR(g))
     {
         ugeneric_error_print(g);
-        respond_from_buffer(cn, G_AS_STR(g), strlen(G_AS_STR(g)));
+        ret = respond_from_buffer(cn, G_AS_STR(g), strlen(G_AS_STR(g)));
         ugeneric_error_destroy(g);
         goto invalid_json;
     }
@@ -349,4 +353,26 @@ invalid_json:
     ugeneric_destroy(g, NULL);
     fprintf(stderr, "invalid response");
     return respond_404(cn, NULL);
+}
+
+static int get_sensor_statistics(struct MHD_Connection *cn, const char *device_id, const char *sensor_id)
+{
+    int ret = 0;
+    uvector_t *samples = get_samples(g_db, device_id, sensor_id, 0, 1577836800);
+    if (samples)
+    {
+        size_t stat_size = 0;
+        char *t = uvector_as_str(samples);
+        char *stat = ustring_fmt_sized("{\"data\": %s}}", &stat_size, t);
+        ret = respond_from_buffer(cn, stat, stat_size);
+        ufree(stat);
+        ufree(t);
+        uvector_destroy(samples);
+    }
+    else
+    {
+        ret = respond_404(cn, NULL);
+    }
+
+    return ret;
 }

@@ -86,7 +86,7 @@ void insert_sample(sqlite3 *db, const char *device_id, const char *sensor_id, co
     }
 }
 
-char *get_samples(sqlite3 *db, const char *device_id, const char *sensor_id, time_t from, time_t to)
+uvector_t *get_samples(sqlite3 *db, const char *device_id, const char *sensor_id, time_t from, time_t to)
 {
     const char *sql_fmt;
     char *sql;
@@ -97,7 +97,7 @@ char *get_samples(sqlite3 *db, const char *device_id, const char *sensor_id, tim
     int i;
     int row = 0;
 
-    sql_fmt = "SELECT * FROM samples where device_id = '%s' and sensor_id = '%s' and timestamp >= %lld and timestamp <= %lld";
+    sql_fmt = "SELECT timestamp,sample FROM samples where device_id = '%s' and sensor_id = '%s' and timestamp >= %lld and timestamp <= %lld";
     rc = asprintf(&sql, sql_fmt, device_id, sensor_id, from, to);
     if (rc == -1)
     {
@@ -108,26 +108,34 @@ char *get_samples(sqlite3 *db, const char *device_id, const char *sensor_id, tim
     sqlite3_prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL);
     free(sql);
 
+    uvector_t *samples = NULL;
     while (true)
     {
-        int s;
+        int s = sqlite3_step(stmt);
+        if (s == SQLITE_ROW)
+        {
+            if (!samples)
+            {
+                samples = uvector_create();
+            }
 
-        s = sqlite3_step (stmt);
-        if (s == SQLITE_ROW) {
-            int bytes;
-            const unsigned char * text;
-            bytes = sqlite3_column_bytes (stmt, 0);
-            text  = sqlite3_column_text (stmt, 2);
-            printf ("%d: %s\n", row, text);
-            row++;
+            const unsigned char *ts = sqlite3_column_text (stmt, 0);
+            const unsigned char *sample = sqlite3_column_text (stmt, 1);
+            udict_t *t = udict_create();
+            udict_put(t, G_STR(ustring_dup(ts)), G_STR(ustring_dup(sample)));
+            uvector_append(samples, G_DICT(t));
         }
-        else if (s == SQLITE_DONE) {
+        else if (s == SQLITE_DONE)
+        {
             break;
         }
-        else {
+        else
+        {
             fprintf (stderr, "Failed.\n");
-            exit (1);
+            exit(1);
         }
     }
-    return 0;
+
+    sqlite3_finalize(stmt);
+    return samples;
 }
