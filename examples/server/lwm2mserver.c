@@ -83,8 +83,6 @@
 
 #define MAX_PACKET_SIZE 1024
 
-#define DB_PATH "lwm2m.db"
-
 volatile sig_atomic_t g_quit = 0;
 
 static void prv_print_error(uint8_t status)
@@ -801,18 +799,27 @@ void handle_sigint(int signum)
     g_quit = 2;
 }
 
+#define DB_PATH "lwm2m.db"
+#define REST_PORT 8888
+#define REST_PORT_STR "8888"
+#define POLL_INTERVAL 5
+#define POLL_INTERVAL_STR "5"
+
 void print_usage(void)
 {
     fprintf(stderr, "Usage: lwm2mserver [OPTION]\r\n");
     fprintf(stderr, "Launch a LWM2M server.\r\n\n");
     fprintf(stdout, "Options:\r\n");
-    fprintf(stdout, "  -4\t\tUse IPv4 connection. Default: IPv6 connection\r\n");
-    fprintf(stdout, "  -l PORT\tSet the local UDP port of the Server. Default: "LWM2M_STANDARD_PORT_STR"\r\n");
-    fprintf(stdout, "  -db-path\tDatabase file. Default: "DB_PATH"\r\n");
-    fprintf(stdout, "  -wipe-db\tWipe DB on start-up if flag is provided.\r\n");
+    fprintf(stdout, "  -6\t\t\tUse IPv6 connection. Default: IPv4 connection\r\n");
+    fprintf(stdout, "  -l PORT\t\tSet the local UDP port of the LWM2M server. Default: "LWM2M_STANDARD_PORT_STR"\r\n");
+    fprintf(stdout, "  -h PORT\t\tSet the local TCP port of the REST server. Default: "REST_PORT_STR"\r\n");
+    fprintf(stdout, "  -s id1,id2,...\tCSV list of sensor IDs to poll.\r\n");
+    fprintf(stdout, "  -i TIME\t\tPolling interval (seconds). Default: "POLL_INTERVAL_STR"\r\n");
+    fprintf(stdout, "  --db-path\t\tDatabase file. Default: "DB_PATH"\r\n");
+    fprintf(stdout, "  --wipe-db\t\tWipe DB on start-up if flag is provided.\r\n");
+    fprintf(stdout, "  --mock-db\t\tMock some DB data compiled in the application.\r\n");
     fprintf(stdout, "\r\n");
 }
-
 
 int main(int argc, char *argv[])
 {
@@ -821,17 +828,19 @@ int main(int argc, char *argv[])
     struct timeval tv;
     int result;
     lwm2m_context_t * lwm2mH = NULL;
-    int i;
     connection_t * connList = NULL;
-    int addressFamily = AF_INET6;
+    int addressFamily = AF_INET;
     int opt;
     const char * localPort = LWM2M_STANDARD_PORT_STR;
 
     char db_path[PATH_MAX] = DB_PATH;
     bool wipe_db = false;
     bool mock_db = false;
+    int rest_port = REST_PORT;
+    const char *poll_sensors = NULL;
+    int poll_interval = POLL_INTERVAL;
 
-    command_desc_t commands[] =
+    static command_desc_t commands[] =
     {
             {"list", "List registered clients.", NULL, prv_output_clients, NULL},
             {"read", "Read from a client.", " read CLIENT# URI\r\n"
@@ -894,63 +903,100 @@ int main(int argc, char *argv[])
     opt = 1;
     while (opt < argc)
     {
-        if (argv[opt] == NULL
-            || argv[opt][0] != '-')
+        if (argv[opt] == NULL || argv[opt][0] != '-')
         {
             print_usage();
             return 0;
         }
         switch (argv[opt][1])
         {
-        case '4':
-            addressFamily = AF_INET;
-            break;
-        case 'l':
-            opt++;
-            if (opt >= argc)
-            {
-                print_usage();
-                return 0;
-            }
-            localPort = argv[opt];
-            break;
-        case 'd':
-            if (strcmp(argv[opt], "-db-path") == 0)
-            {
+            case '6':
+                addressFamily = AF_INET6;
+                break;
+            case 'l':
                 opt++;
-                strcpy(db_path, argv[opt]);
-            }
-            else
+                if (opt >= argc)
+                {
+                    print_usage();
+                    return 0;
+                }
+                localPort = argv[opt];
+                break;
+            case 'h':
+                opt++;
+                if (opt >= argc)
+                {
+                    print_usage();
+                    return 0;
+                }
+                rest_port = atoi(argv[opt]);
+                break;
+            case 's':
+                opt++;
+                if (opt >= argc)
+                {
+                    print_usage();
+                    return 0;
+                }
+                poll_sensors = argv[opt];
+                break;
+            case 'i':
+                opt++;
+                if (opt >= argc)
+                {
+                    print_usage();
+                    return 0;
+                }
+                poll_interval = atoi(argv[opt]);
+                break;
+            case '-':
             {
-                print_usage();
-                return 0;
+                switch (argv[opt][2])
+                {
+                case 'd':
+                    if (strcmp(&argv[opt][2], "db-path") == 0)
+                    {
+                        opt++;
+                        strcpy(db_path, argv[opt]);
+                    }
+                    else
+                    {
+                        print_usage();
+                        return 0;
+                    }
+                    break;
+                case 'w':
+                    if (strcmp(&argv[opt][2], "wipe-db") == 0)
+                    {
+                        wipe_db = true;
+                    }
+                    else
+                    {
+                        print_usage();
+                        return 0;
+                    }
+                    break;
+                case 'm':
+                    if (strcmp(&argv[opt][2], "mock-db") == 0)
+                    {
+                        mock_db = true;
+                    }
+                    else
+                    {
+                        print_usage();
+                        return 0;
+                    }
+                    break;
+                default:
+                    print_usage();
+                    return 0;
+                }
             }
             break;
-        case 'w':
-            if (strcmp(argv[opt], "-wipe-db") == 0)
-            {
-                wipe_db = true;
-            }
-            else
-            {
+
+            default:
                 print_usage();
                 return 0;
-            }
-            break;
-        case 'm':
-            if (strcmp(argv[opt], "-mock-db") == 0)
-            {
-                mock_db = true;
-            }
-            else
-            {
-                print_usage();
-                return 0;
-            }
-            break;
-        default:
-            print_usage();
-            return 0;
         }
         opt += 1;
     }
@@ -998,7 +1044,7 @@ int main(int argc, char *argv[])
 
     signal(SIGINT, handle_sigint);
 
-    for (i = 0 ; commands[i].name != NULL ; i++)
+    for (int i = 0 ; commands[i].name != NULL ; i++)
     {
         commands[i].userData = (void *)lwm2mH;
     }
@@ -1009,13 +1055,19 @@ int main(int argc, char *argv[])
     /* httpd */
     pthread_mutex_t lwm2m_lock;
     pthread_mutex_init(&lwm2m_lock, NULL);
-    start_httpd(8888, lwm2mH, &lwm2m_lock, db); /* TODO: pass port via cli */
+    start_httpd(rest_port, lwm2mH, &lwm2m_lock, db);
 
     /* poller */
-    uvector_t *sensors = uvector_create();
-    uvector_append(sensors, G_CSTR(".1.0.1"));
-    uvector_append(sensors, G_CSTR(".1.0.2"));
-    start_poller(sensors, db, lwm2mH, &lwm2m_lock, 5); /* TODO: pass interval via cli */
+    poller_t *poller = NULL;
+    if (poll_sensors)
+    {
+        poller = poller_create(poll_sensors, db, lwm2mH, &lwm2m_lock, poll_interval);
+        poller_start(poller);
+    }
+    else
+    {
+        printf("sensors IDs were not provided, nothing to poll\n");
+    }
 
     while (0 == g_quit)
     {
@@ -1125,10 +1177,14 @@ int main(int argc, char *argv[])
         }
     }
 
-    stop_poller();
+    if (poller)
+    {
+        poller_stop(poller);
+        poller_destroy(poller);
+    }
+
     stop_httpd();
     sqlite3_close(db);
-    uvector_destroy(sensors);
 
     lwm2m_close(lwm2mH);
     close(sock);

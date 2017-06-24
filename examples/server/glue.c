@@ -51,15 +51,46 @@ void data_consumer_destroy(data_consumer_t *dc)
     ufree(dc);
 }
 
+static const char *status_to_str(int status)
+{
+    #define CODE_TO_STRING(X) case X : return #X
+
+    switch (status)
+    {
+        CODE_TO_STRING(COAP_NO_ERROR);
+        CODE_TO_STRING(COAP_IGNORE);
+        CODE_TO_STRING(COAP_201_CREATED);
+        CODE_TO_STRING(COAP_202_DELETED);
+        CODE_TO_STRING(COAP_204_CHANGED);
+        CODE_TO_STRING(COAP_205_CONTENT);
+        CODE_TO_STRING(COAP_400_BAD_REQUEST);
+        CODE_TO_STRING(COAP_401_UNAUTHORIZED);
+        CODE_TO_STRING(COAP_404_NOT_FOUND);
+        CODE_TO_STRING(COAP_405_METHOD_NOT_ALLOWED);
+        CODE_TO_STRING(COAP_406_NOT_ACCEPTABLE);
+        CODE_TO_STRING(COAP_500_INTERNAL_SERVER_ERROR);
+        CODE_TO_STRING(COAP_501_NOT_IMPLEMENTED);
+        CODE_TO_STRING(COAP_503_SERVICE_UNAVAILABLE);
+        default: return "";
+    }
+}
+
 static void read_callback(uint16_t clientID, lwm2m_uri_t *uri,
                           int status, lwm2m_media_type_t fmt,
                           uint8_t *data, int data_size, void *user_data)
 {
     data_consumer_t *dc = user_data;
 
-    UASSERT(status == COAP_205_CONTENT);
-    UASSERT(fmt == LWM2M_CONTENT_JSON);
-    data_consumer_put_data(dc, ustring_ndup(data, data_size), data_size); // umemdup() ?
+    if (status == COAP_205_CONTENT)
+    {
+        UASSERT(fmt == LWM2M_CONTENT_JSON);
+        data_consumer_put_data(dc, ustring_ndup(data, data_size), data_size);
+    }
+    else
+    {
+        fprintf(stderr, "device replied with error: %s\n", status_to_str(status));
+        data_consumer_put_data(dc, NULL, 0);
+    }
 }
 
 lwm2m_client_t *find_device_by_id(const char *device_id,

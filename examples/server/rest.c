@@ -9,8 +9,6 @@
 #include "rest.h"
 #include "glue.h"
 
-#define CODE_TO_STRING(X)   case X : return #X
-
 struct MHD_Daemon *g_httpd;
 lwm2m_context_t *g_lwm2m_ctx;
 pthread_mutex_t *g_lwm2m_lock;
@@ -31,28 +29,6 @@ static int get_sensors_list(struct MHD_Connection *cn, const char *device_id);
 static int get_sensor_value(struct MHD_Connection *cn, const char *device_id, const char *sensor_id);
 static int get_sensor_statistics(struct MHD_Connection *cn, const char *device_id, const char *sensor_id, time_t from, time_t to);
 
-static const char *status_to_str(int status)
-{
-    switch(status)
-    {
-        CODE_TO_STRING(COAP_NO_ERROR);
-        CODE_TO_STRING(COAP_IGNORE);
-        CODE_TO_STRING(COAP_201_CREATED);
-        CODE_TO_STRING(COAP_202_DELETED);
-        CODE_TO_STRING(COAP_204_CHANGED);
-        CODE_TO_STRING(COAP_205_CONTENT);
-        CODE_TO_STRING(COAP_400_BAD_REQUEST);
-        CODE_TO_STRING(COAP_401_UNAUTHORIZED);
-        CODE_TO_STRING(COAP_404_NOT_FOUND);
-        CODE_TO_STRING(COAP_405_METHOD_NOT_ALLOWED);
-        CODE_TO_STRING(COAP_406_NOT_ACCEPTABLE);
-        CODE_TO_STRING(COAP_500_INTERNAL_SERVER_ERROR);
-        CODE_TO_STRING(COAP_501_NOT_IMPLEMENTED);
-        CODE_TO_STRING(COAP_503_SERVICE_UNAVAILABLE);
-        default: return "";
-    }
-}
-
 void start_httpd(int port, lwm2m_context_t *lwm2m_ctx, pthread_mutex_t *lwm2m_lock, sqlite3 *db)
 {
     UASSERT(lwm2m_ctx);
@@ -63,7 +39,7 @@ void start_httpd(int port, lwm2m_context_t *lwm2m_ctx, pthread_mutex_t *lwm2m_lo
     g_httpd = MHD_start_daemon(MHD_USE_THREAD_PER_CONNECTION,
             port, NULL, NULL, &handler, NULL,
             MHD_OPTION_END);
-    UASSERT(g_httpd);
+    UASSERT_PERROR(g_httpd);
     printf("microhttpd started on port %d\n", port);
 }
 
