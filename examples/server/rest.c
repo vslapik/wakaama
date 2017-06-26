@@ -27,6 +27,7 @@ static int get_devices_list(struct MHD_Connection *cn);
 static int get_device_info(struct MHD_Connection *cn, const char *device_id);
 static int get_sensors_list(struct MHD_Connection *cn, const char *device_id);
 static int get_sensor_value(struct MHD_Connection *cn, const char *device_id, const char *sensor_id);
+static int set_sensor_value(struct MHD_Connection *cn, const char *device_id, const char *sensor_id);
 static int get_sensor_statistics(struct MHD_Connection *cn, const char *device_id, const char *sensor_id, time_t from, time_t to);
 
 void start_httpd(int port, lwm2m_context_t *lwm2m_ctx, pthread_mutex_t *lwm2m_lock, sqlite3 *db)
@@ -199,7 +200,7 @@ static int handle_url(struct MHD_Connection *cn, const char *url, const uvector_
                     }
                     else
                     {
-                        // set sensor value
+                        return set_sensor_value(cn, device_id, sensor_id);
                     }
                 }
                 else if (strcmp(t, "stat") == 0)
@@ -323,7 +324,7 @@ static int get_sensor_value(struct MHD_Connection *cn, const char *device_id, co
         goto invalid_json;
     }
 
-    ugeneric_print(g, NULL);
+    ugeneric_print(g);
     ugeneric_t e = udict_get(G_AS_PTR(g), G_STR("e"), G_NULL);
     if (G_IS_NULL(e) || !G_IS_VECTOR(e) || (uvector_get_size(G_AS_PTR(e)) != 1))
     {
@@ -353,6 +354,20 @@ invalid_json:
     ugeneric_destroy(g, NULL);
     fprintf(stderr, "invalid response");
     return respond_404(cn, NULL);
+}
+
+static int set_sensor_value(struct MHD_Connection *cn, const char *device_id, const char *sensor_id)
+{
+    /*
+    if (lwm2m_write_sensor(device_id, sensor_id, g_lwm2m_ctx, g_lwm2m_lock, &response, &response_size) != 0)
+    {
+        return respond_404(cn, NULL);
+    }
+    if (response_size == 0)
+    {
+        return respond_404(cn, NULL);
+    }
+    */
 }
 
 static int get_sensor_statistics(struct MHD_Connection *cn, const char *device_id, const char *sensor_id, time_t from, time_t to)

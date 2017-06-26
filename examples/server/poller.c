@@ -45,7 +45,7 @@ static char *extract_sample(const char *data, size_t data_size)
         goto invalid_json;
     }
 
-    char *sample = ugeneric_as_str(v, NULL);
+    char *sample = ugeneric_as_str(v);
     ugeneric_destroy(g, NULL);
     return sample;
 

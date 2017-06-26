@@ -121,6 +121,13 @@ uvector_t *lwm2m_get_devices(lwm2m_context_t *lwm2m_ctx, pthread_mutex_t *lwm2m_
     return v;
 }
 
+int lwm2m_write_sensor(const char *device_id, const char *sensor_id,
+                       lwm2m_context_t *lwm2m_ctx, pthread_mutex_t *lwm2m_lock,
+                       char **data, size_t *data_size)
+{
+    
+}
+
 int lwm2m_read_sensor(const char *device_id, const char *sensor_id,
                       lwm2m_context_t *lwm2m_ctx, pthread_mutex_t *lwm2m_lock,
                       char **data, size_t *data_size)
