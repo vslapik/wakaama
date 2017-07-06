@@ -25,16 +25,25 @@ header {
     background-image: url("../img/pattern_heading.png");
 }
 
-/*header h1 {
-    font-size: 50px;
-    font-weight: 700;
+.loading-overlay {
+    position: absolute;
+    height: 100%;
+    width: 100%;
+    left: 0;
+    top: 0;
+    background-color: white;
+    opacity: 0.9;
+    z-index: 100;
 }
 
-header h3 {
-    margin-top: 0;
-    font-weight: 500;
+.loading-overlay .spinner {
+    background-image: url("../img/spinner.gif");
+    background-repeat: no-repeat;
+    background-position: center;
+    height: 100%;
+    width: 100%;
 }
-*/
+
 .page-wrapper {
     margin: 0 auto;
     min-height: 100%;
@@ -48,6 +57,7 @@ header h3 {
 }
 
 .main-wrapper {
+    position: relative;
     min-height: 600px;
     height: 100%;
     margin-top: -130px;
