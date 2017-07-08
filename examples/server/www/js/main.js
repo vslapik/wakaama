@@ -58,6 +58,13 @@ $(function () {
     function createDataModelAndCards(data) {
         var result = Array.prototype.slice.call(arguments);
 
+        if (!Array.isArray(result[0])) {
+            var arr = [[]];
+
+            result.forEach((e) => arr[0].push(e));
+            result = arr;
+        }    
+
         result.forEach(function(devSensList) {
             var devName = devSensList[0].devName;
 
