@@ -156,9 +156,7 @@ function addCardToPane(deviceDescr, sensorData) {
     if (this.sensorType != 'bulb') {
         this.cardWrap.addClass('i-card-details-hide');
         this.cardElem.addClass('openedable');
-        this.cardElem.on('click', function(e) {
-        	that.processOpenCardEvent(e);
-        });
+        this.cardElem.on('click', processOpenCardEvent.bind(this));
     }
 
     headingElem = getNewCardHeading(this.sensorID);
