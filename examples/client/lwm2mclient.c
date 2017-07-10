@@ -56,6 +56,8 @@
 
 */
 
+#define _GNU_SOURCE
+
 #include "lwm2mclient.h"
 #include "liblwm2m.h"
 #include "commandline.h"
@@ -79,6 +81,8 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <signal.h>
+
+#include <assert.h>
 
 #define MAX_PACKET_SIZE 1024
 #define DEFAULT_SERVER_IPV6 "[::1]"
@@ -789,7 +793,7 @@ void print_usage(void)
     fprintf(stdout, "  -l PORT\tSet the local UDP port of the Client. Default: 56830\r\n");
     fprintf(stdout, "  -h HOST\tSet the hostname of the LWM2M Server to connect to. Default: localhost\r\n");
     fprintf(stdout, "  -p PORT\tSet the port of the LWM2M Server to connect to. Default: "LWM2M_STANDARD_PORT_STR"\r\n");
-    fprintf(stdout, "  -4\t\tUse IPv4 connection. Default: IPv6 connection\r\n");
+    fprintf(stdout, "  -6\t\tUse IPv6 connection. Default: IPv4 connection\r\n");
     fprintf(stdout, "  -t TIME\tSet the lifetime of the Client. Default: 300\r\n");
     fprintf(stdout, "  -b\t\tBootstrap requested.\r\n");
     fprintf(stdout, "  -c\t\tChange battery level over time.\r\n");
@@ -806,10 +810,13 @@ int main(int argc, char *argv[])
     int result;
     lwm2m_context_t * lwm2mH = NULL;
     int i;
-    const char * localPort = "56830";
+//    const char * localPort = "56830";
+    const char * localPort = "0";
     const char * server = NULL;
     const char * serverPort = LWM2M_STANDARD_PORT_STR;
-    char * name = "testlwm2mclient";
+//    char * name = "testlwm2mclient";
+    char * name;
+    assert(asprintf(&name, "client_%ld", time(NULL)));
     int lifetime = 300;
     int batterylevelchanging = 0;
     time_t reboot_time = 0;
@@ -859,7 +866,7 @@ int main(int argc, char *argv[])
     };
 
     memset(&data, 0, sizeof(client_data_t));
-    data.addressFamily = AF_INET6;
+    data.addressFamily = AF_INET;
 
     opt = 1;
     while (opt < argc)
@@ -950,8 +957,8 @@ int main(int argc, char *argv[])
             serverPort = argv[opt];
             serverPortChanged = true;
             break;
-        case '4':
-            data.addressFamily = AF_INET;
+        case '6':
+            data.addressFamily = AF_INET6;
             break;
         default:
             print_usage();
