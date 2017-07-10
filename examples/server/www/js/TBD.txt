@@ -1,0 +1,9 @@
+ TBD:
+ - Update list of connected devices (removing inactive clients)
+ - Add some sensor info in datasets
+ - Decrease number of returned timestamps
+ - Add "units" field to sensor data
+
+TODO:
+ - Change UI style to more "impressive"
+ - Make complete error handler
