@@ -22,7 +22,7 @@ header {
     background-color: rgba(128, 128, 128, 0.64);
     position: relative;
     z-index: -1;
-    background-image: url("../img/pattern_heading.png");
+    background-image: url("../img/pattern_heading2.png");
 }
 
 .loading-overlay {

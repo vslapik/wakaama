@@ -1,5 +1,5 @@
 function processOpenCardEvent(e) {
-	var that = this;
+    var that = this;
 
     var target = e.target;
     var cardWrapper = $(target).closest('.i-card-wrapper');
@@ -13,15 +13,15 @@ function processOpenCardEvent(e) {
     var siblToRowEnd = cardsInContainer - (cardWrapper.index() % cardsInContainer) - 1;
 
     var nextSiblings = cardWrapper.nextAll();
-    var toInserAfter;
+    var toInsertAfter;
 
     if (nextSiblings.length < siblToRowEnd) {
-        toInserAfter = nextSiblings.last()
+        toInsertAfter = nextSiblings.last()
     } else {
-        toInserAfter = (siblToRowEnd == 0) ? cardWrapper : cardWrapper.nextAll().eq(siblToRowEnd - 1);
+        toInsertAfter = (siblToRowEnd == 0) ? cardWrapper : cardWrapper.nextAll().eq(siblToRowEnd - 1);
     }
    
-    toInserAfter.after(
+    toInsertAfter.after(
         "<div class=\"col-12 col-md-12 col-sm-12\" style=\"display: none;\"> \
             <div class=\"i-card i-details-card p-3\"></div> \
         </div>");
@@ -43,27 +43,161 @@ function processOpenCardEvent(e) {
 
 
         $.getJSON(getSensorStatURL(that.devName, that.sensorID))
-        	.then(function(res) {
-        		var sensStat = res.data.map(function(el) {
-        			var timestamp = Object.keys(el)[0];
+            .then(function(res) {
+                var sensStat = res.data.map(function(el) {
+                    var timestamp = Object.keys(el)[0];
 
-        			return {
-        				timestamp: timestamp,
-        				value: el[timestamp]
-        			}
-        		})
+                    // debugger;
 
-        		addChartToDetailsCard(detailsCard, {
-		            deviceName: that.devName,
-		            measuredValue: that.sensorType,
-		            values: sensStat
-		        });
-        	});
+                    return {
+                        timestamp: new Date(timestamp*1000),
+                        value: Number(el[timestamp])
+                    }
+                })
+
+                that.sensStat = sensStat;
+
+                that.addChart(detailsCard)
+            });
     } else {
         detailsCard.parent().hide();
         cardWrapper.removeClass("i-card-details-open");
         cardWrapper.addClass("i-card-details-hide");
     }
+}
+
+function getMinMaxForDayReport() {
+	var minTime = new Date();
+	var maxTime = new Date();
+
+	minTime.setDate(minTime.getDate() - 1);
+	maxTime.setHours(maxTime.getHours() + 2);
+
+	return [minTime, maxTime];
+}
+
+function getMinMaxForWeekReport() {
+	var minTime = new Date();
+	var maxTime = new Date();
+
+	minTime.setDate(minTime.getDate() - 7);
+	maxTime.setHours(maxTime.getHours() + 2);
+
+	return [minTime, maxTime];
+}
+
+function getMinMaxForMonthReport() {
+	var minTime = new Date();
+	var maxTime = new Date();
+
+	minTime.setDate(minTime.getDate() - 31);
+	maxTime.setHours(maxTime.getHours() + 2);
+
+	return [minTime, maxTime];
+}
+
+function addChartToCard(cardElement, chartData) {
+	var minMaxTimeVals = getMinMaxForDayReport();
+
+	this.canvasWrapper = $('<div/>', { class: 'chart-wrapper'});
+    this.chartElem = $('<div/>', { class: 'param-chart'});
+    this.timeScaleBtns = $(' \
+    	<div class="btn-group" role="group" aria-label="..."> \
+			<button type="button" class="btn btn-secondary time-scale-btn" value="day">Day</button> \
+			<button type="button" class="btn btn-secondary time-scale-btn" value="week">Week</button> \
+			<button type="button" class="btn btn-secondary time-scale-btn" value="month">Month</button> \
+		</div>');
+
+
+    this.chartElem.appendTo(this.canvasWrapper);
+    this.canvasWrapper.appendTo(cardElement);
+    this.timeScaleBtns.appendTo(cardElement);
+
+    this.chartData = new google.visualization.DataTable();
+    this.chartData.addColumn('datetime', 'Time of Day');
+    this.chartData.addColumn('number', 'Rating');
+
+    this.chartData.addRows(this.sensStat.map((el) => ([el.timestamp, el.value])));
+    this.currentTimeScale = 'day';
+
+    this.chartOptions = {
+      	title: 'Statistics for the DAY',
+		width: this.chartElem.width(),
+		height: 300,
+		legend: {
+			position: 'none'
+		},
+		chartArea: {
+		  	width: '85%'
+		},
+		hAxis: {
+        	gridlines: {
+        		units: {
+	              days: {format: ['MMM dd']},
+	              hours: {format: ['HH:mm', 'ha']},
+	            },
+        		count: 	-1
+        	},
+        	minorGridlines: {
+        		units: {
+              		hours: {format: ['hh:mm:ss a', 'ha']},
+              		minutes: {format: ['HH:mm a Z', ':mm']}
+            	}
+          	},
+          	viewWindow: {
+				min: minMaxTimeVals[0],
+				max: minMaxTimeVals[1]
+			}
+		}
+    };
+
+
+    this.chart = new google.visualization.LineChart(this.chartElem.get()[0]);
+
+    this.chart.draw(this.chartData, this.chartOptions);
+
+    $('.time-scale-btn', this.timeScaleBtns).on('click', this.processTimeScaleEvent.bind(this));
+}
+
+
+function processTimeScaleEvent(e) {
+	var newTimeScale = $(e.target)[0].value;
+	var minMaxTimeVals;
+	
+
+	if (this.currentTimeScale === newTimeScale) {
+		return;
+	}
+
+	switch(newTimeScale) {
+		case 'day':
+			minMaxTimeVals = getMinMaxForDayReport();
+
+			this.chartOptions.title = 'Statistics for the DAY';
+
+			break;
+		case 'week':
+			minMaxTimeVals = getMinMaxForWeekReport();
+			
+			this.chartOptions.title = 'Statistics for the WEEK';
+			
+			break;
+		case 'month':
+			minMaxTimeVals = getMinMaxForMonthReport();
+			
+			this.chartOptions.title = 'Statistics for the MONTH';
+			
+			break;
+		default:
+			break;
+	}
+
+	this.chartOptions.hAxis.viewWindow.min = minMaxTimeVals[0];
+	this.chartOptions.hAxis.viewWindow.max = minMaxTimeVals[1];
+
+    this.chart.draw(this.chartData, this.chartOptions);
+
+    this.currentTimeScale = newTimeScale;
 }
 
 function getNewCardHeading(text) {
@@ -147,7 +281,7 @@ function getNewCardContent(value, type) {
 }
 
 function addCardToPane(deviceDescr, sensorData) {
-	var that = this;
+    var that = this;
     cardsContainer = $('.device-panel .row');
 
     this.cardWrap = $('<div/>', { class: 'col-12 col-lg-3 col-md-4 col-sm-6 i-card-wrapper'});
@@ -172,53 +306,6 @@ function addCardToPane(deviceDescr, sensorData) {
     this.cardWrap.appendTo(cardsContainer);
 }
 
-function addChartToDetailsCard(cardElement, data) {
-    var chartCanvas = $('<canvas/>', { class: 'param-chart'});
-    chartCanvas.appendTo(cardElement);
-
-    var myChart = new Chart(chartCanvas.get(), {
-        type: 'line',
-        data: {
-            labels: data.values.map((el) => el.timestamp),
-            datasets: [
-                {
-                    label: data.measuredValue,
-                    fill: true,
-                    lineTension: 0.1,
-                    backgroundColor: "rgba(67,86,104,0.4)",
-                    borderColor: "rgba(67,86,104,1)",
-                    borderCapStyle: 'butt',
-                    borderDash: [],
-                    borderDashOffset: 0.0,
-                    borderJoinStyle: 'miter',
-                    pointBorderColor: "rgba(67,86,104,1)",
-                    pointBackgroundColor: "#fff",
-                    pointBorderWidth: 1,
-                    pointHoverRadius: 5,
-                    pointHoverBackgroundColor: "rgba(67,86,104,1)",
-                    pointHoverBorderColor: "rgba(220,220,220,1)",
-                    pointHoverBorderWidth: 2,
-                    pointRadius: 5,
-                    pointHitRadius: 10,
-                    data: data.values.map((el) => el.value),
-                    spanGaps: false,
-                }
-            ]
-        },
-        options: {
-            scales: {
-                yAxes: [{
-                    ticks: {
-                        beginAtZero:true
-                    }
-                }]
-            },
-            responsive: true,
-            maintainAspectRatio: false
-        }
-    });
-}
-
 function Card(devDescr, sensData) {
     this.devName = devDescr
     this.sensorID = sensData.id;
@@ -226,9 +313,10 @@ function Card(devDescr, sensData) {
     this.sensorType = sensData.type;
 
     this.addToPane = addCardToPane;
-    this.addChart = addChartToDetailsCard;
+    this.addChart = addChartToCard;
 
     this.processOpenCardEvent = processOpenCardEvent;
+    this.processTimeScaleEvent = processTimeScaleEvent;
 
     return this;
 }
