@@ -37,7 +37,7 @@ void data_consumer_wait_for_data(data_consumer_t *dc)
         int ret = pthread_cond_timedwait(&dc->data_wait, &dc->data_lock, &till);
         if (ret == ETIMEDOUT)
         {
-            printf("lwm2m device didn't reply within timeout\n");
+            UABORT("wakaama screwed up\n");
             break;
         }
     }
@@ -125,7 +125,7 @@ int lwm2m_write_sensor(const char *device_id, const char *sensor_id,
                        lwm2m_context_t *lwm2m_ctx, pthread_mutex_t *lwm2m_lock,
                        char **data, size_t *data_size)
 {
-    
+
 }
 
 int lwm2m_read_sensor(const char *device_id, const char *sensor_id,
@@ -151,7 +151,13 @@ int lwm2m_read_sensor(const char *device_id, const char *sensor_id,
         goto not_found;
     }
 
-    dc = data_consumer_create((struct timespec){.tv_sec = 2, .tv_nsec = 0});
+    // Timeout for response is hardcoded in transaction.c and there is no
+    // way to configure it. Timeout below is for conditional variable the code 
+    // waiting on, it should be greater than coap timeout. If data consumer timeouts
+    // it means we are screwed as lwm2m library neither signalled response timeout nor
+    // reply received and likely the code got stuck somewhere, not expected to happen
+    // but just for case ...
+    dc = data_consumer_create((struct timespec){.tv_sec = 120, .tv_nsec = 0});
 
     pthread_mutex_lock(lwm2m_lock); //---------------------------------------
     ret = lwm2m_dm_read(lwm2m_ctx, c->internalID, &uri, read_callback, dc);

@@ -51,12 +51,27 @@ lwm2m_object_t * get_object_location(void);
 void free_object_location(lwm2m_object_t * object);
 void display_location_object(lwm2m_object_t * objectP);
 /*
- * object_test.c
+ * ipso_temperature_object.c
  */
-#define TEST_OBJECT_ID 1024
-lwm2m_object_t * get_test_object(void);
-void free_test_object(lwm2m_object_t * object);
-void display_test_object(lwm2m_object_t * objectP);
+#define IPSO_TEMPERATURE_OBJECT_ID 3303
+lwm2m_object_t *get_ipso_temperature_object(lwm2m_context_t **lwm2mH);
+void free_ipso_temperature_object(lwm2m_object_t *object);
+void display_ipso_temperature_object(lwm2m_object_t *objectP);
+/*
+ * ipso_humidity_object.c
+ */
+#define IPSO_HUMIDITY_OBJECT_ID 3304
+lwm2m_object_t *get_ipso_humidity_object(lwm2m_context_t **lwm2mH);
+void free_ipso_humidity_object(lwm2m_object_t *object);
+void display_ipso_humidity_object(lwm2m_object_t *objectP);
+/*
+ * ipso_actuation_object.c
+ */
+#define IPSO_ACTUATION_OBJECT_ID 3306
+lwm2m_object_t *get_ipso_actuation_object(lwm2m_context_t **lwm2mH);
+void free_ipso_actuation_object(lwm2m_object_t *object);
+void display_ipso_actuation_object(lwm2m_object_t *objectP);
+
 /*
  * object_server.c
  */
@@ -107,5 +122,9 @@ void clean_security_object(lwm2m_object_t * objectP);
 char * get_server_uri(lwm2m_object_t * objectP, uint16_t secObjInstID);
 void display_security_object(lwm2m_object_t * objectP);
 void copy_security_object(lwm2m_object_t * objectDest, lwm2m_object_t * objectSrc);
+
+double get_temperature(void);
+double get_humidity(void);
+void set_LED_state(bool state);
 
 #endif /* LWM2MCLIENT_H_ */
