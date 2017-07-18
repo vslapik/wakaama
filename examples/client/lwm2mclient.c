@@ -1362,15 +1362,21 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+unsigned int rand_from_range(int min, int max)
+{
+   double scaled = (double)rand() / RAND_MAX;
+
+   return (max - min + 1) * scaled + min;
+}
 
 double get_temperature(void)
 {
-    return (double)rand();
+    return (double)rand_from_range(-40, +40);
 }
 
 double get_humidity(void)
 {
-    return get_temperature();
+    return (double)rand_from_range(0, 100);
 }
 
 void set_LED_state(bool state)
