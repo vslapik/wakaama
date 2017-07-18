@@ -17,9 +17,19 @@ struct poller_opaq {
     char *device_id;
 };
 
-static char *extract_sample(const char *data, size_t data_size)
+static char *extract_sample(const lwm2m_read_response_t *response)
 {
-    ugeneric_t g = ugeneric_parse(data);
+    if (response->status == COAP_205_CONTENT)
+    {
+        UASSERT(response->fmt == LWM2M_CONTENT_JSON);
+    }
+    else
+    {
+        fprintf(stderr, "device replied with error: %s\n", status_to_str(response->status));
+        return NULL;
+    }
+
+    ugeneric_t g = ugeneric_parse(response->data);
 
     if (G_IS_ERROR(g))
     {
@@ -64,17 +74,18 @@ static void poller_poll(poller_t *p)
 
     for (size_t j = 0; j < len; j++)
     {
-        save_sensor(p->db, p->device_id, G_AS_STR(s[j]), "TBD[name]", "TBD[unit]");
-        char *response;
+        lwm2m_read_response_t *response;
         size_t response_size;
+
         printf("poll %s/%s\n", p->device_id, G_AS_STR(s[j]));
-        if (lwm2m_read_sensor(p->device_id, G_AS_STR(s[j]), p->lwm2m_ctx, p->lwm2m_lock, &response, &response_size) == 0)
+        if (lwm2m_read_sensor(p->device_id, G_AS_STR(s[j]), p->lwm2m_ctx, p->lwm2m_lock, p->terminate_read_fd, &response, &response_size) == 0)
         {
             if (response_size)
             {
-                char *sample = extract_sample(response, response_size);
+                char *sample = extract_sample(response);
                 if (sample)
                 {
+                    save_sensor(p->db, p->device_id, G_AS_STR(s[j]), "TBD[name]", "TBD[unit]");
                     insert_sample(p->db, p->device_id, G_AS_STR(s[j]), sample, time(NULL));
                     ufree(sample);
                 }
@@ -84,6 +95,7 @@ static void poller_poll(poller_t *p)
         else
         {
             // don't care, if there is anything to consume we consume, it not - bail out
+            fprintf(stderr, "lwm2m_read_sensor() failed\n");
         }
     }
 }
@@ -107,9 +119,13 @@ static void *loop(void *data)
         if (ret != 0) // 0 means timeout expired
         {
             UASSERT_PERROR(ret != -1); // error
-            if (ret == 1) // some data appeared in the channedl, just exit
+            if (ret == 1) // some data appeared in the terminate channel, exit from loop
             {
                 break;
+            }
+            else
+            {
+                UABORT("select returned unexpected value");
             }
         }
     }
@@ -152,19 +168,13 @@ void poller_start(poller_t *p)
     ufree(sensors_str);
 }
 
-void poller_stop(poller_t *p)
-{
-    UASSERT_INPUT(p);
-
-    UASSERT_PERROR(write(p->terminate_write_fd, "stop", 5) == 5);
-    UASSERT_PERROR(pthread_join(p->poller_thread, NULL) == 0);
-    printf("polling thread for %s terminated\n", p->device_id);
-}
-
 void poller_destroy(poller_t *p)
 {
     if (p)
     {
+        UASSERT_PERROR(write(p->terminate_write_fd, "stop", 5) == 5);
+        UASSERT_PERROR(pthread_join(p->poller_thread, NULL) == 0);
+        printf("polling thread for %s terminated\n", p->device_id);
         uvector_destroy(p->sensors);
         ufree(p->device_id);
         ufree(p);

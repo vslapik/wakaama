@@ -94,6 +94,12 @@ typedef struct {
     udict_t *pollers; // {'device_id': poller_ptr}
 } monitor_callback_data_t;
 
+void destroy_poller(void *ptr)
+{
+    poller_t *p = ptr;
+    poller_destroy(p);
+}
+
 static void prv_print_error(uint8_t status)
 {
     fprintf(stdout, "Error: ");
@@ -763,16 +769,29 @@ static void prv_monitor_callback(uint16_t clientID,
                                  void *userData)
 {
     monitor_callback_data_t *mcd = userData;
+    UASSERT(mcd);
+
+    ugeneric_t p;
 
     lwm2m_context_t *lwm2mH = mcd->lwm2m_context;
-    lwm2m_client_t *targetP;
+    lwm2m_client_t *targetP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)lwm2mH->clientList, clientID);
+    UASSERT(targetP);
+
+    /*
+     * Doesn't work as transaction ID and client ID are not related to each other in any way, need to
+     * find another way how to remove transactions related to unregistered clients as lwm2m still executes
+     * callbacks for non-existing client which leads to crash ...
+    lwm2m_transaction_t *txn = (lwm2m_transaction_t *)lwm2m_list_find((lwm2m_list_t *)lwm2mH->transactionList, clientID);
+    if (txn)
+    {
+        printf("Found pending transactions!!!!\n");
+    }
+    */
 
     switch (status)
     {
     case COAP_201_CREATED:
         fprintf(stdout, "\r\nNew client #%d registered.\r\n", clientID);
-
-        targetP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)lwm2mH->clientList, clientID);
         prv_dump_client(targetP);
 
         if (mcd->poll_sensors)
@@ -799,14 +818,16 @@ static void prv_monitor_callback(uint16_t clientID,
 
     case COAP_202_DELETED:
         fprintf(stdout, "\r\nClient #%d unregistered.\r\n", clientID);
-        // destroy poller
+
+        p = udict_pop(mcd->pollers, G_STR(targetP->name), G_NULL);
+        UASSERT(!G_IS_NULL(p));
+        // Can not delete here as lwm2m lock is acquired and destroy_poller may deadlock on joining thread
+        // holding this lock, need to invent something different ...
+        // destroy_poller(G_AS_PTR(p));
         break;
 
     case COAP_204_CHANGED:
         fprintf(stdout, "\r\nClient #%d updated.\r\n", clientID);
-
-        targetP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)lwm2mH->clientList, clientID);
-
         prv_dump_client(targetP);
         break;
 
@@ -851,13 +872,6 @@ void print_usage(void)
     fprintf(stdout, "  --wipe-db\t\tWipe DB on start-up if flag is provided.\r\n");
     fprintf(stdout, "  --mock-db\t\tMock some DB data compiled in the application.\r\n");
     fprintf(stdout, "\r\n");
-}
-
-void destroy_poller(void *ptr)
-{
-    poller_t *p = ptr;
-    poller_stop(p);
-    poller_destroy(p);
 }
 
 int main(int argc, char *argv[])
@@ -1105,7 +1119,7 @@ int main(int argc, char *argv[])
     lwm2m_set_monitoring_callback(lwm2mH, prv_monitor_callback, &mcd);
 
     /* httpd */
-    start_httpd(rest_port, lwm2mH, &lwm2m_lock, db);
+    httpd_t *httpd = start_httpd(rest_port, lwm2mH, &lwm2m_lock, db);
 
     while (0 == g_quit)
     {
@@ -1216,7 +1230,7 @@ int main(int argc, char *argv[])
     }
     udict_destroy(pollers);
 
-    stop_httpd();
+    stop_httpd(httpd);
     sqlite3_close(db);
 
     lwm2m_close(lwm2mH);

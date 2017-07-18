@@ -6,7 +6,9 @@
 #include <pthread.h>
 #include "db.h"
 
-void start_httpd(int port, lwm2m_context_t *lwm2m_ctx, pthread_mutex_t *lwm2m_lock, sqlite3 *db);
-void stop_httpd(void);
+typedef struct httpd_opaq httpd_t;
+
+httpd_t *start_httpd(int port, lwm2m_context_t *lwm2m_ctx, pthread_mutex_t *lwm2m_lock, sqlite3 *db);
+void stop_httpd(httpd_t *httpd);
 
 #endif
