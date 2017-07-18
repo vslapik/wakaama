@@ -1362,7 +1362,8 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-unsigned int rand_from_range(int min, int max)
+
+int rand_from_range(int min, int max)
 {
    double scaled = (double)rand() / RAND_MAX;
 
