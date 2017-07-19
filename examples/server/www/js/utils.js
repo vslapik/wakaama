@@ -22,6 +22,7 @@ mockData = {
 }
 
 var errorMsgs = {
+    "deviceListEmpty": "There is no connected devices!",
 	"getDeviceListErr": "Error when loading device list!",
 	"getSensorsListErr": "Error when loading sensors list!",
 	"getSensorValueErr": "Error when loading sensor value!",

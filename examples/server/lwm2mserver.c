@@ -85,6 +85,15 @@
 
 volatile sig_atomic_t g_quit = 0;
 
+typedef struct {
+    lwm2m_context_t *lwm2m_context;
+    pthread_mutex_t *lwm2m_lock;
+    const char *poll_sensors;
+    int poll_interval;
+    sqlite3 *db;
+    udict_t *pollers; // {'device_id': poller_ptr}
+} monitor_callback_data_t;
+
 static void prv_print_error(uint8_t status)
 {
     fprintf(stdout, "Error: ");
@@ -746,15 +755,17 @@ syntax_error:
 }
 
 static void prv_monitor_callback(uint16_t clientID,
-                                 lwm2m_uri_t * uriP,
+                                 lwm2m_uri_t *uriP,
                                  int status,
                                  lwm2m_media_type_t format,
-                                 uint8_t * data,
+                                 uint8_t *data,
                                  int dataLength,
-                                 void * userData)
+                                 void *userData)
 {
-    lwm2m_context_t * lwm2mH = (lwm2m_context_t *) userData;
-    lwm2m_client_t * targetP;
+    monitor_callback_data_t *mcd = userData;
+
+    lwm2m_context_t *lwm2mH = mcd->lwm2m_context;
+    lwm2m_client_t *targetP;
 
     switch (status)
     {
@@ -762,12 +773,33 @@ static void prv_monitor_callback(uint16_t clientID,
         fprintf(stdout, "\r\nNew client #%d registered.\r\n", clientID);
 
         targetP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)lwm2mH->clientList, clientID);
-
         prv_dump_client(targetP);
+
+        if (mcd->poll_sensors)
+        {
+            if (!udict_has_key(mcd->pollers, G_STR(targetP->name)))
+            {
+                poller_t *poller = poller_create(targetP->name, mcd->poll_sensors,
+                                                 mcd->db, lwm2mH, mcd->lwm2m_lock,
+                                                 mcd->poll_interval);
+                poller_start(poller);
+                udict_put(mcd->pollers, G_STR(ustring_dup(targetP->name)), G_PTR(poller));
+            }
+            else
+            {
+                printf("Device %s is already connected, poller is already running for it.", targetP->name);
+            }
+        }
+        else
+        {
+            printf("sensors IDs were not provided, nothing to poll\n");
+        }
+
         break;
 
     case COAP_202_DELETED:
         fprintf(stdout, "\r\nClient #%d unregistered.\r\n", clientID);
+        // destroy poller
         break;
 
     case COAP_204_CHANGED:
@@ -819,6 +851,13 @@ void print_usage(void)
     fprintf(stdout, "  --wipe-db\t\tWipe DB on start-up if flag is provided.\r\n");
     fprintf(stdout, "  --mock-db\t\tMock some DB data compiled in the application.\r\n");
     fprintf(stdout, "\r\n");
+}
+
+void destroy_poller(void *ptr)
+{
+    poller_t *p = ptr;
+    poller_stop(p);
+    poller_destroy(p);
 }
 
 int main(int argc, char *argv[])
@@ -1050,24 +1089,23 @@ int main(int argc, char *argv[])
     }
     fprintf(stdout, "> "); fflush(stdout);
 
-    lwm2m_set_monitoring_callback(lwm2mH, prv_monitor_callback, lwm2mH);
-
-    /* httpd */
     pthread_mutex_t lwm2m_lock;
     pthread_mutex_init(&lwm2m_lock, NULL);
-    start_httpd(rest_port, lwm2mH, &lwm2m_lock, db);
 
-    /* poller */
-    poller_t *poller = NULL;
-    if (poll_sensors)
-    {
-        poller = poller_create(poll_sensors, db, lwm2mH, &lwm2m_lock, poll_interval);
-        poller_start(poller);
-    }
-    else
-    {
-        printf("sensors IDs were not provided, nothing to poll\n");
-    }
+    udict_t *pollers = udict_create();
+    udict_set_void_destroyer(pollers, destroy_poller);
+    monitor_callback_data_t mcd = {
+        .lwm2m_context = lwm2mH,
+        .lwm2m_lock = &lwm2m_lock,
+        .db = db,
+        .poll_interval = poll_interval,
+        .poll_sensors = poll_sensors,
+        .pollers = pollers,
+    };
+    lwm2m_set_monitoring_callback(lwm2mH, prv_monitor_callback, &mcd);
+
+    /* httpd */
+    start_httpd(rest_port, lwm2mH, &lwm2m_lock, db);
 
     while (0 == g_quit)
     {
@@ -1176,12 +1214,7 @@ int main(int argc, char *argv[])
             }
         }
     }
-
-    if (poller)
-    {
-        poller_stop(poller);
-        poller_destroy(poller);
-    }
+    udict_destroy(pollers);
 
     stop_httpd();
     sqlite3_close(db);

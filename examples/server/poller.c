@@ -14,6 +14,7 @@ struct poller_opaq {
     struct timeval interval;
     int terminate_read_fd;
     int terminate_write_fd;
+    char *device_id;
 };
 
 static char *extract_sample(const char *data, size_t data_size)
@@ -58,42 +59,33 @@ static void poller_poll(poller_t *p)
 {
     UASSERT_INPUT(p);
 
-    uvector_t *devices = lwm2m_get_devices(p->lwm2m_ctx, p->lwm2m_lock);
-    ugeneric_t *d = uvector_get_cells(devices);
     ugeneric_t *s = uvector_get_cells(p->sensors);
-    size_t dsize = uvector_get_size(devices);
-    size_t ssize = uvector_get_size(p->sensors);
+    size_t len = uvector_get_size(p->sensors);
 
-    for (size_t i = 0; i < dsize; i++)
+    for (size_t j = 0; j < len; j++)
     {
-        for (size_t j = 0; j < ssize; j++)
+        save_sensor(p->db, p->device_id, G_AS_STR(s[j]), "TBD[name]", "TBD[unit]");
+        char *response;
+        size_t response_size;
+        printf("poll %s/%s\n", p->device_id, G_AS_STR(s[j]));
+        if (lwm2m_read_sensor(p->device_id, G_AS_STR(s[j]), p->lwm2m_ctx, p->lwm2m_lock, &response, &response_size) == 0)
         {
-            save_sensor(p->db, G_AS_STR(d[i]), G_AS_STR(s[i]), "TBD[name]", "TBD[unit]");
-
-            char *response;
-            size_t response_size;
-            printf("poll %s/%s\n", G_AS_STR(d[i]), G_AS_STR(s[j]));
-            if (lwm2m_read_sensor(G_AS_STR(d[i]), G_AS_STR(s[j]), p->lwm2m_ctx, p->lwm2m_lock, &response, &response_size) == 0)
+            if (response_size)
             {
-                if (response_size)
+                char *sample = extract_sample(response, response_size);
+                if (sample)
                 {
-                    char *sample = extract_sample(response, response_size);
-                    if (sample)
-                    {
-                        insert_sample(p->db, G_AS_STR(d[i]), G_AS_STR(s[j]), sample, time(NULL));
-                        ufree(sample);
-                    }
-                    ufree(response);
+                    insert_sample(p->db, p->device_id, G_AS_STR(s[j]), sample, time(NULL));
+                    ufree(sample);
                 }
-            }
-            else
-            {
-                // don't care, if there is anything to consume we consume, it not - bail out
+                ufree(response);
             }
         }
+        else
+        {
+            // don't care, if there is anything to consume we consume, it not - bail out
+        }
     }
-
-    uvector_destroy(devices);
 }
 
 static void *loop(void *data)
@@ -123,7 +115,7 @@ static void *loop(void *data)
     }
 }
 
-poller_t *poller_create(const char *sensors_str, sqlite3 *db, lwm2m_context_t *lwm2m_ctx,
+poller_t *poller_create(const char *device_id, const char *sensors_str, sqlite3 *db, lwm2m_context_t *lwm2m_ctx,
                         pthread_mutex_t *lwm2m_lock, int interval)
 {
     UASSERT_INPUT(sensors_str);
@@ -138,6 +130,7 @@ poller_t *poller_create(const char *sensors_str, sqlite3 *db, lwm2m_context_t *l
     poller_t *p = umalloc(sizeof(*p));
     p->terminate_read_fd = terminate_pipe[0];
     p->terminate_write_fd = terminate_pipe[1];
+    p->device_id = ustring_dup(device_id);
     p->db = db;
     p->lwm2m_lock = lwm2m_lock;
     p->lwm2m_ctx = lwm2m_ctx;
@@ -155,8 +148,7 @@ void poller_start(poller_t *p)
     UASSERT_PERROR(pthread_create(&p->poller_thread, NULL, loop, p) == 0);
 
     char *sensors_str = uvector_as_str(p->sensors);
-    printf("polling thread was created to gather values "
-           "from the following resources: %s\n", sensors_str);
+    printf("polling thread was created to gather values from the following resources %s on device %s.\n", sensors_str, p->device_id);
     ufree(sensors_str);
 }
 
@@ -166,7 +158,7 @@ void poller_stop(poller_t *p)
 
     UASSERT_PERROR(write(p->terminate_write_fd, "stop", 5) == 5);
     UASSERT_PERROR(pthread_join(p->poller_thread, NULL) == 0);
-    printf("polling thread terminated\n");
+    printf("polling thread for %s terminated\n", p->device_id);
 }
 
 void poller_destroy(poller_t *p)
@@ -174,6 +166,7 @@ void poller_destroy(poller_t *p)
     if (p)
     {
         uvector_destroy(p->sensors);
+        ufree(p->device_id);
         ufree(p);
     }
 }

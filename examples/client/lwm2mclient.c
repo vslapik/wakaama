@@ -91,7 +91,7 @@
 int g_reboot = 0;
 static int g_quit = 0;
 
-#define OBJ_COUNT 9
+#define OBJ_COUNT 11
 lwm2m_object_t * objArray[OBJ_COUNT];
 
 // only backup security and server objects
@@ -561,53 +561,6 @@ static void update_battery_level(lwm2m_context_t * context)
     }
 }
 
-static void prv_add(char * buffer,
-                    void * user_data)
-{
-    lwm2m_context_t * lwm2mH = (lwm2m_context_t *)user_data;
-    lwm2m_object_t * objectP;
-    int res;
-
-    objectP = get_test_object();
-    if (objectP == NULL)
-    {
-        fprintf(stdout, "Creating object 1024 failed.\r\n");
-        return;
-    }
-    res = lwm2m_add_object(lwm2mH, objectP);
-    if (res != 0)
-    {
-        fprintf(stdout, "Adding object 1024 failed: ");
-        print_status(stdout, res);
-        fprintf(stdout, "\r\n");
-    }
-    else
-    {
-        fprintf(stdout, "Object 1024 added.\r\n");
-    }
-    return;
-}
-
-static void prv_remove(char * buffer,
-                       void * user_data)
-{
-    lwm2m_context_t * lwm2mH = (lwm2m_context_t *)user_data;
-    int res;
-
-    res = lwm2m_remove_object(lwm2mH, 1024);
-    if (res != 0)
-    {
-        fprintf(stdout, "Removing object 1024 failed: ");
-        print_status(stdout, res);
-        fprintf(stdout, "\r\n");
-    }
-    else
-    {
-        fprintf(stdout, "Object 1024 removed.\r\n");
-    }
-    return;
-}
-
 #ifdef LWM2M_BOOTSTRAP
 
 static void prv_initiate_bootstrap(char * buffer,
@@ -656,9 +609,6 @@ static void prv_display_objects(char * buffer,
                 display_location_object(object);
                 break;
             case LWM2M_CONN_STATS_OBJECT_ID:
-                break;
-            case TEST_OBJECT_ID:
-                display_test_object(object);
                 break;
             }
         }
@@ -789,7 +739,7 @@ void print_usage(void)
     fprintf(stdout, "Usage: lwm2mclient [OPTION]\r\n");
     fprintf(stdout, "Launch a LWM2M client.\r\n");
     fprintf(stdout, "Options:\r\n");
-    fprintf(stdout, "  -n NAME\tSet the endpoint name of the Client. Default: testlwm2mclient\r\n");
+    fprintf(stdout, "  -n NAME\tSet the endpoint name of the Client, random name if not provided.\r\n");
     fprintf(stdout, "  -l PORT\tSet the local UDP port of the Client. Default: 56830\r\n");
     fprintf(stdout, "  -h HOST\tSet the hostname of the LWM2M Server to connect to. Default: localhost\r\n");
     fprintf(stdout, "  -p PORT\tSet the port of the LWM2M Server to connect to. Default: "LWM2M_STANDARD_PORT_STR"\r\n");
@@ -857,8 +807,6 @@ int main(int argc, char *argv[])
             {"disp", "Display current objects/instances/resources", NULL, prv_display_objects, NULL},
             {"dump", "Dump an Object", "dump URI"
                                        "URI: uri of the Object or Instance such as /3/0, /1\r\n", prv_object_dump, NULL},
-            {"add", "Add support of object 1024", NULL, prv_add, NULL},
-            {"rm", "Remove support of object 1024", NULL, prv_remove, NULL},
             {"quit", "Quit the client gracefully.", NULL, prv_quit, NULL},
             {"^C", "Quit the client abruptly (without sending a de-register message).", NULL, NULL, NULL},
 
@@ -1062,45 +1010,59 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    objArray[5] = get_test_object();
+    objArray[5] = get_ipso_temperature_object(&lwm2mH);
     if (NULL == objArray[5])
     {
-        fprintf(stderr, "Failed to create test object\r\n");
+        fprintf(stderr, "Failed to create ipso temperature object\r\n");
         return -1;
     }
 
-    objArray[6] = get_object_conn_m();
+    objArray[6] = get_ipso_humidity_object(&lwm2mH);
     if (NULL == objArray[6])
+    {
+        fprintf(stderr, "Failed to create ipso humidity object\r\n");
+        return -1;
+    }
+
+    objArray[7] = get_ipso_actuation_object(&lwm2mH);
+    if (NULL == objArray[7])
+    {
+        fprintf(stderr, "Failed to create ipso actuation object\r\n");
+        return -1;
+    }
+
+    objArray[8] = get_object_conn_m();
+    if (NULL == objArray[8])
     {
         fprintf(stderr, "Failed to create connectivity monitoring object\r\n");
         return -1;
     }
 
-    objArray[7] = get_object_conn_s();
-    if (NULL == objArray[7])
+    objArray[9] = get_object_conn_s();
+    if (NULL == objArray[9])
     {
         fprintf(stderr, "Failed to create connectivity statistics object\r\n");
         return -1;
     }
 
     int instId = 0;
-    objArray[8] = acc_ctrl_create_object();
-    if (NULL == objArray[8])
+    objArray[10] = acc_ctrl_create_object();
+    if (NULL == objArray[10])
     {
         fprintf(stderr, "Failed to create Access Control object\r\n");
         return -1;
     }
-    else if (acc_ctrl_obj_add_inst(objArray[8], instId, 3, 0, serverId)==false)
+    else if (acc_ctrl_obj_add_inst(objArray[10], instId, 3, 0, serverId)==false)
     {
         fprintf(stderr, "Failed to create Access Control object instance\r\n");
         return -1;
     }
-    else if (acc_ctrl_oi_add_ac_val(objArray[8], instId, 0, 0b000000000001111)==false)
+    else if (acc_ctrl_oi_add_ac_val(objArray[10], instId, 0, 0b000000000001111)==false)
     {
         fprintf(stderr, "Failed to create Access Control ACL default resource\r\n");
         return -1;
     }
-    else if (acc_ctrl_oi_add_ac_val(objArray[8], instId, 999, 0b000000000000001)==false)
+    else if (acc_ctrl_oi_add_ac_val(objArray[10], instId, 999, 0b000000000000001)==false)
     {
         fprintf(stderr, "Failed to create Access Control ACL resource for serverId: 999\r\n");
         return -1;
@@ -1323,7 +1285,7 @@ int main(int argc, char *argv[])
 #else
                         lwm2m_handle_packet(lwm2mH, buffer, numBytes, connP);
 #endif
-                        conn_s_updateRxStatistic(objArray[7], numBytes, false);
+                        conn_s_updateRxStatistic(objArray[9], numBytes, false);
                     }
                     else
                     {
@@ -1384,10 +1346,12 @@ int main(int argc, char *argv[])
     free_object_device(objArray[2]);
     free_object_firmware(objArray[3]);
     free_object_location(objArray[4]);
-    free_test_object(objArray[5]);
-    free_object_conn_m(objArray[6]);
-    free_object_conn_s(objArray[7]);
-    acl_ctrl_free_object(objArray[8]);
+    free_ipso_temperature_object(objArray[5]);
+    free_ipso_humidity_object(objArray[6]);
+    free_ipso_actuation_object(objArray[7]);
+    free_object_conn_m(objArray[8]);
+    free_object_conn_s(objArray[9]);
+    acl_ctrl_free_object(objArray[10]);
 
 #ifdef MEMORY_TRACE
     if (g_quit == 1)
@@ -1398,3 +1362,19 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
+double get_temperature(void)
+{
+    return (double)rand();
+}
+
+double get_humidity(void)
+{
+    return get_temperature();
+}
+
+void set_LED_state(bool state)
+{
+    (void)state;
+}
+

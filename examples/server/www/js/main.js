@@ -3,12 +3,30 @@ $(function () {
     devicesData = {}
  
     var Rules = {
-        "3303": ".5700",
-        "3304": ".5700",
-        "1024": ".1"
+        "3303": {
+            valueID: ".5700",
+            units: "celsium",
+            type: "temp"
+        },
+        "3304": {
+            valueID: ".5700",
+            units: "percents",
+            type: "humid"
+        },
+        "1024": {
+            valueID: ".1",
+            units: "test units",
+            type: "type"
+        }
     }
 
     function getSensorsListForDevices(data) {
+        if (data.data.length == 0) {
+            showErrorOnOverlay(errorMsgs["deviceListEmpty"]);
+            
+            return $.Deferred().reject(errorMsgs["deviceListEmpty"]);
+        }
+
         var devProms = data.data.map(function(devName) {
             return $.getJSON(getSensorsListURL(devName))
                 .then(function(data) {
@@ -32,7 +50,7 @@ $(function () {
                 var devID = sensName.split('.')[1];
 
                 if (Rules.hasOwnProperty(devID)) {
-                    filteredSensList[sensName] = sensName + Rules[devID];    
+                    filteredSensList[sensName] = sensName + Rules[devID].valueID;    
                 }    
                
             });
@@ -83,7 +101,7 @@ $(function () {
         
         for (device in devicesData) {
             devicesData[device].sensors.forEach(function(sensorData, index) {
-                var newCard = new Card(devicesData[device].descr, sensorData);
+                var newCard = new Card(devicesData[device].descr, sensorData, Rules);
                 
                 newCard.addToPane(devicesData[device].descr, sensorData)
                 
