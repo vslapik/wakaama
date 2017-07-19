@@ -96,6 +96,77 @@ function getMinMaxForMonthReport() {
 	return [minTime, maxTime];
 }
 
+function addHighchartToCard(cardElement, chartData) {
+	this.canvasWrapper = $('<div/>', { class: 'chart-wrapper'});
+    this.chartElem = $('<div/>', { class: 'param-chart', id: 'chart_container'});
+    this.timeScaleBtns = $(' \
+    	<div class="btn-group" role="group" aria-label="..."> \
+			<button type="button" class="btn btn-secondary time-scale-btn" value="day">Day</button> \
+			<button type="button" class="btn btn-secondary time-scale-btn" value="week">Week</button> \
+			<button type="button" class="btn btn-secondary time-scale-btn" value="month">Month</button> \
+		</div>');
+
+
+    this.chartElem.appendTo(this.canvasWrapper);
+    this.canvasWrapper.appendTo(cardElement);
+
+    Highcharts.chart('chart_container', {
+        chart: {
+            zoomType: 'x'
+        },
+        title: {
+            text: 'USD to EUR exchange rate over time'
+        },
+        subtitle: {
+            text: document.ontouchstart === undefined ?
+                    'Click and drag in the plot area to zoom in' : 'Pinch the chart to zoom in'
+        },
+        xAxis: {
+            type: 'datetime'
+        },
+        yAxis: {
+            title: {
+                text: 'Exchange rate'
+            }
+        },
+        legend: {
+            enabled: false
+        },
+        plotOptions: {
+            area: {
+                fillColor: {
+                    linearGradient: {
+                        x1: 0,
+                        y1: 0,
+                        x2: 0,
+                        y2: 1
+                    },
+                    stops: [
+                        [0, Highcharts.getOptions().colors[0]],
+                        [1, Highcharts.Color(Highcharts.getOptions().colors[0]).setOpacity(0).get('rgba')]
+                    ]
+                },
+                marker: {
+                    radius: 2
+                },
+                lineWidth: 1,
+                states: {
+                    hover: {
+                        lineWidth: 1
+                    }
+                },
+                threshold: null
+            }
+        },
+
+        series: [{
+            type: 'area',
+            name: 'USD to EUR',
+            data: this.sensStat.map((el) => ([el.timestamp, el.value]))
+        }]
+    });
+}
+
 function addChartToCard(cardElement, chartData) {
 	var minMaxTimeVals = getMinMaxForDayReport();
 
@@ -313,7 +384,7 @@ function Card(devDescr, sensData) {
     this.sensorType = sensData.type;
 
     this.addToPane = addCardToPane;
-    this.addChart = addChartToCard;
+    this.addChart = addHighchartToCard/*addChartToCard*/;
 
     this.processOpenCardEvent = processOpenCardEvent;
     this.processTimeScaleEvent = processTimeScaleEvent;
