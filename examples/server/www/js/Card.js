@@ -15,10 +15,10 @@ function processOpenCardEvent(e) {
     var nextSiblings = cardWrapper.nextAll();
     var toInsertAfter;
 
-    if (nextSiblings.length < siblToRowEnd) {
+    if (nextSiblings.length > 0 && nextSiblings.length < siblToRowEnd) {
         toInsertAfter = nextSiblings.last()
     } else {
-        toInsertAfter = (siblToRowEnd == 0) ? cardWrapper : cardWrapper.nextAll().eq(siblToRowEnd - 1);
+        toInsertAfter = (siblToRowEnd == 0 || nextSiblings.length == 0) ? cardWrapper : cardWrapper.nextAll().eq(siblToRowEnd - 1);
     }
    
     toInsertAfter.after(
@@ -41,14 +41,13 @@ function processOpenCardEvent(e) {
             detailsCard.empty();
         }
 
+        debugger;
 
         $.getJSON(getSensorStatURL(that.devName, that.sensorID))
             .then(function(res) {
                 var sensStat = res.data.map(function(el) {
                     var timestamp = Object.keys(el)[0];
-
-                    // debugger;
-
+                  
                     return {
                         timestamp: new Date(timestamp*1000),
                         value: Number(el[timestamp])
@@ -94,6 +93,77 @@ function getMinMaxForMonthReport() {
 	maxTime.setHours(maxTime.getHours() + 2);
 
 	return [minTime, maxTime];
+}
+
+function addHighchartToCard(cardElement, chartData) {
+	this.canvasWrapper = $('<div/>', { class: 'chart-wrapper'});
+    this.chartElem = $('<div/>', { class: 'param-chart', id: 'chart_container'});
+    this.timeScaleBtns = $(' \
+    	<div class="btn-group" role="group" aria-label="..."> \
+			<button type="button" class="btn btn-secondary time-scale-btn" value="day">Day</button> \
+			<button type="button" class="btn btn-secondary time-scale-btn" value="week">Week</button> \
+			<button type="button" class="btn btn-secondary time-scale-btn" value="month">Month</button> \
+		</div>');
+
+
+    this.chartElem.appendTo(this.canvasWrapper);
+    this.canvasWrapper.appendTo(cardElement);
+
+    Highcharts.chart('chart_container', {
+        chart: {
+            zoomType: 'x'
+        },
+        title: {
+            text: 'USD to EUR exchange rate over time'
+        },
+        subtitle: {
+            text: document.ontouchstart === undefined ?
+                    'Click and drag in the plot area to zoom in' : 'Pinch the chart to zoom in'
+        },
+        xAxis: {
+            type: 'datetime'
+        },
+        yAxis: {
+            title: {
+                text: 'Exchange rate'
+            }
+        },
+        legend: {
+            enabled: false
+        },
+        plotOptions: {
+            area: {
+                fillColor: {
+                    linearGradient: {
+                        x1: 0,
+                        y1: 0,
+                        x2: 0,
+                        y2: 1
+                    },
+                    stops: [
+                        [0, Highcharts.getOptions().colors[0]],
+                        [1, Highcharts.Color(Highcharts.getOptions().colors[0]).setOpacity(0).get('rgba')]
+                    ]
+                },
+                marker: {
+                    radius: 2
+                },
+                lineWidth: 1,
+                states: {
+                    hover: {
+                        lineWidth: 1
+                    }
+                },
+                threshold: null
+            }
+        },
+
+        series: [{
+            type: 'area',
+            name: 'USD to EUR',
+            data: this.sensStat.map((el) => ([el.timestamp, el.value]))
+        }]
+    });
 }
 
 function addChartToCard(cardElement, chartData) {
@@ -220,8 +290,10 @@ function getNewCardLogo(type) {
     var logoBg = $('<div/>', { class: 'i-card-logo-background'});
     var logoIcon;
 
-    if (type == 'temp' || type == 'type') {
+    if (type == 'temp') {
         logoIcon = $('<i/>', { class: 'fa fa-thermometer-three-quarters i-card-logo-icon'});
+    } else if (type == 'type') {
+        logoIcon = $('<i/>', { class: 'fa fa-question i-card-logo-icon'});
     } else if (type == 'humid') {
         logoIcon = $('<i/>', { class: 'fa fa-tint i-card-logo-icon'});
     } else if (type == 'bulb') {
@@ -259,19 +331,13 @@ function getNewCardLogo(type) {
     return logoWrap;
 }
 
-function getNewCardContent(value, type) {
+function getNewCardContent(value, units) {
     contentWrap = $('<div/>', { class: 'i-card-content'});
     valueWrap = $('<div/>', { class: 'sensor-value'});
     contentValue = $('<h2/>', { text: value});
     contentUnits = $('<h3/>');
 
-    if (type == 'temp' || type == 'type') {
-        contentUnits.text('celsium');
-    } else if (type == 'humid') {
-        contentUnits.text('percents');
-    } else if (type == 'bulb') {
-        contentUnits.text('power');
-    }
+    contentUnits.text(units);
 
     contentValue.appendTo(valueWrap);
     contentUnits.appendTo(valueWrap);
@@ -294,8 +360,8 @@ function addCardToPane(deviceDescr, sensorData) {
     }
 
     headingElem = getNewCardHeading(this.sensorID);
-    logoItem = getNewCardLogo(this.sensorType);
-    contentItem = getNewCardContent(this.sensorValue, this.sensorType);
+    logoItem = getNewCardLogo(this.configObj.type);
+    contentItem = getNewCardContent(this.sensorValue, this.configObj.units);
 
     headingElem.appendTo(this.cardElem);
     logoItem.appendTo(this.cardElem);
@@ -306,17 +372,21 @@ function addCardToPane(deviceDescr, sensorData) {
     this.cardWrap.appendTo(cardsContainer);
 }
 
-function Card(devDescr, sensData) {
+
+function Card(devDescr, sensData, Rules) {
     this.devName = devDescr
     this.sensorID = sensData.id;
     this.sensorValue = sensData.value;
-    this.sensorType = sensData.type;
 
     this.addToPane = addCardToPane;
-    this.addChart = addChartToCard;
+    this.addChart = addHighchartToCard/*addChartToCard*/;
 
     this.processOpenCardEvent = processOpenCardEvent;
     this.processTimeScaleEvent = processTimeScaleEvent;
 
+    if (Rules[this.sensorID.split('.')[1]] != undefined) {
+        this.configObj = Rules[this.sensorID.split('.')[1]];
+    }
+  
     return this;
 }
