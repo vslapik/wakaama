@@ -11,6 +11,5 @@ poller_t *poller_create(const char *device_id, const char *sensors_str, sqlite3 
                         pthread_mutex_t *lwm2m_lock, int interval);
 void poller_destroy(poller_t *p);
 void poller_start(poller_t *p);
-void poller_stop(poller_t *p);
 
 #endif

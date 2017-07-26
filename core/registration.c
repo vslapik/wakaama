@@ -991,6 +991,8 @@ coap_status_t registration_handleRequest(lwm2m_context_t * contextP,
                 return COAP_412_PRECONDITION_FAILED;
             }
 
+            lwm2m_free(version);
+
             if (lifetime == 0)
             {
                 lifetime = LWM2M_DEFAULT_LIFETIME;
@@ -1251,11 +1253,11 @@ void registration_step(lwm2m_context_t * contextP,
 
         if (clientP->endOfLife <= currentTime)
         {
-            contextP->clientList = (lwm2m_client_t *)LWM2M_LIST_RM(contextP->clientList, clientP->internalID, NULL);
             if (contextP->monitorCallback != NULL)
             {
                 contextP->monitorCallback(clientP->internalID, NULL, COAP_202_DELETED, LWM2M_CONTENT_TEXT, NULL, 0, contextP->monitorUserData);
             }
+            contextP->clientList = (lwm2m_client_t *)LWM2M_LIST_RM(contextP->clientList, clientP->internalID, NULL);
             registration_freeClient(clientP);
         }
         else

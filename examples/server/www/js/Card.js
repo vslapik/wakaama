@@ -47,7 +47,7 @@ function processOpenCardEvent(e) {
             .then(function(res) {
                 var sensStat = res.data.map(function(el) {
                     var timestamp = Object.keys(el)[0];
-
+                  
                     return {
                         timestamp: new Date(timestamp*1000),
                         value: Number(el[timestamp])
@@ -372,6 +372,7 @@ function addCardToPane(deviceDescr, sensorData) {
     this.cardWrap.appendTo(cardsContainer);
 }
 
+
 function Card(devDescr, sensData, Rules) {
     this.devName = devDescr
     this.sensorID = sensData.id;
@@ -383,11 +384,9 @@ function Card(devDescr, sensData, Rules) {
     this.processOpenCardEvent = processOpenCardEvent;
     this.processTimeScaleEvent = processTimeScaleEvent;
 
-    // debugger;
-
     if (Rules[this.sensorID.split('.')[1]] != undefined) {
         this.configObj = Rules[this.sensorID.split('.')[1]];
     }
-
+  
     return this;
 }
