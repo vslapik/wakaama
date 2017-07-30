@@ -41,15 +41,14 @@ function processOpenCardEvent(e) {
             detailsCard.empty();
         }
 
-        debugger;
-
         $.getJSON(getSensorStatURL(that.devName, that.sensorID))
             .then(function(res) {
                 var sensStat = res.data.map(function(el) {
                     var timestamp = Object.keys(el)[0];
                   
                     return {
-                        timestamp: new Date(timestamp*1000),
+                        timestamp: timestamp*1000,
+                        /*timestamp: new Date(timestamp*1000),*/
                         value: Number(el[timestamp])
                     }
                 })
@@ -66,44 +65,44 @@ function processOpenCardEvent(e) {
 }
 
 function getMinMaxForDayReport() {
-	var minTime = new Date();
-	var maxTime = new Date();
+    var minTime = new Date();
+    var maxTime = new Date();
 
-	minTime.setDate(minTime.getDate() - 1);
-	maxTime.setHours(maxTime.getHours() + 2);
+    minTime.setDate(minTime.getDate() - 1);
+    maxTime.setHours(maxTime.getHours() + 2);
 
-	return [minTime, maxTime];
+    return [minTime, maxTime];
 }
 
 function getMinMaxForWeekReport() {
-	var minTime = new Date();
-	var maxTime = new Date();
+    var minTime = new Date();
+    var maxTime = new Date();
 
-	minTime.setDate(minTime.getDate() - 7);
-	maxTime.setHours(maxTime.getHours() + 2);
+    minTime.setDate(minTime.getDate() - 7);
+    maxTime.setHours(maxTime.getHours() + 2);
 
-	return [minTime, maxTime];
+    return [minTime, maxTime];
 }
 
 function getMinMaxForMonthReport() {
-	var minTime = new Date();
-	var maxTime = new Date();
+    var minTime = new Date();
+    var maxTime = new Date();
 
-	minTime.setDate(minTime.getDate() - 31);
-	maxTime.setHours(maxTime.getHours() + 2);
+    minTime.setDate(minTime.getDate() - 31);
+    maxTime.setHours(maxTime.getHours() + 2);
 
-	return [minTime, maxTime];
+    return [minTime, maxTime];
 }
 
 function addHighchartToCard(cardElement, chartData) {
-	this.canvasWrapper = $('<div/>', { class: 'chart-wrapper'});
+    this.canvasWrapper = $('<div/>', { class: 'chart-wrapper'});
     this.chartElem = $('<div/>', { class: 'param-chart', id: 'chart_container'});
     this.timeScaleBtns = $(' \
-    	<div class="btn-group" role="group" aria-label="..."> \
-			<button type="button" class="btn btn-secondary time-scale-btn" value="day">Day</button> \
-			<button type="button" class="btn btn-secondary time-scale-btn" value="week">Week</button> \
-			<button type="button" class="btn btn-secondary time-scale-btn" value="month">Month</button> \
-		</div>');
+        <div class="btn-group" role="group" aria-label="..."> \
+            <button type="button" class="btn btn-secondary time-scale-btn" value="day">Day</button> \
+            <button type="button" class="btn btn-secondary time-scale-btn" value="week">Week</button> \
+            <button type="button" class="btn btn-secondary time-scale-btn" value="month">Month</button> \
+        </div>');
 
 
     this.chartElem.appendTo(this.canvasWrapper);
@@ -114,7 +113,7 @@ function addHighchartToCard(cardElement, chartData) {
             zoomType: 'x'
         },
         title: {
-            text: 'USD to EUR exchange rate over time'
+            text: getDeviceTypeStr(this.configObj.type) + ' sensor statistics'
         },
         subtitle: {
             text: document.ontouchstart === undefined ?
@@ -125,7 +124,7 @@ function addHighchartToCard(cardElement, chartData) {
         },
         yAxis: {
             title: {
-                text: 'Exchange rate'
+                text: 'Sensor value'
             }
         },
         legend: {
@@ -160,114 +159,10 @@ function addHighchartToCard(cardElement, chartData) {
 
         series: [{
             type: 'area',
-            name: 'USD to EUR',
+            name: 'Sensor measurements',
             data: this.sensStat.map((el) => ([el.timestamp, el.value]))
         }]
     });
-}
-
-function addChartToCard(cardElement, chartData) {
-	var minMaxTimeVals = getMinMaxForDayReport();
-
-	this.canvasWrapper = $('<div/>', { class: 'chart-wrapper'});
-    this.chartElem = $('<div/>', { class: 'param-chart'});
-    this.timeScaleBtns = $(' \
-    	<div class="btn-group" role="group" aria-label="..."> \
-			<button type="button" class="btn btn-secondary time-scale-btn" value="day">Day</button> \
-			<button type="button" class="btn btn-secondary time-scale-btn" value="week">Week</button> \
-			<button type="button" class="btn btn-secondary time-scale-btn" value="month">Month</button> \
-		</div>');
-
-
-    this.chartElem.appendTo(this.canvasWrapper);
-    this.canvasWrapper.appendTo(cardElement);
-    this.timeScaleBtns.appendTo(cardElement);
-
-    this.chartData = new google.visualization.DataTable();
-    this.chartData.addColumn('datetime', 'Time of Day');
-    this.chartData.addColumn('number', 'Rating');
-
-    this.chartData.addRows(this.sensStat.map((el) => ([el.timestamp, el.value])));
-    this.currentTimeScale = 'day';
-
-    this.chartOptions = {
-      	title: 'Statistics for the DAY',
-		width: this.chartElem.width(),
-		height: 300,
-		legend: {
-			position: 'none'
-		},
-		chartArea: {
-		  	width: '85%'
-		},
-		hAxis: {
-        	gridlines: {
-        		units: {
-	              days: {format: ['MMM dd']},
-	              hours: {format: ['HH:mm', 'ha']},
-	            },
-        		count: 	-1
-        	},
-        	minorGridlines: {
-        		units: {
-              		hours: {format: ['hh:mm:ss a', 'ha']},
-              		minutes: {format: ['HH:mm a Z', ':mm']}
-            	}
-          	},
-          	viewWindow: {
-				min: minMaxTimeVals[0],
-				max: minMaxTimeVals[1]
-			}
-		}
-    };
-
-
-    this.chart = new google.visualization.LineChart(this.chartElem.get()[0]);
-
-    this.chart.draw(this.chartData, this.chartOptions);
-
-    $('.time-scale-btn', this.timeScaleBtns).on('click', this.processTimeScaleEvent.bind(this));
-}
-
-
-function processTimeScaleEvent(e) {
-	var newTimeScale = $(e.target)[0].value;
-	var minMaxTimeVals;
-	
-
-	if (this.currentTimeScale === newTimeScale) {
-		return;
-	}
-
-	switch(newTimeScale) {
-		case 'day':
-			minMaxTimeVals = getMinMaxForDayReport();
-
-			this.chartOptions.title = 'Statistics for the DAY';
-
-			break;
-		case 'week':
-			minMaxTimeVals = getMinMaxForWeekReport();
-			
-			this.chartOptions.title = 'Statistics for the WEEK';
-			
-			break;
-		case 'month':
-			minMaxTimeVals = getMinMaxForMonthReport();
-			
-			this.chartOptions.title = 'Statistics for the MONTH';
-			
-			break;
-		default:
-			break;
-	}
-
-	this.chartOptions.hAxis.viewWindow.min = minMaxTimeVals[0];
-	this.chartOptions.hAxis.viewWindow.max = minMaxTimeVals[1];
-
-    this.chart.draw(this.chartData, this.chartOptions);
-
-    this.currentTimeScale = newTimeScale;
 }
 
 function getNewCardHeading(text) {
@@ -371,7 +266,6 @@ function addCardToPane(deviceDescr, sensorData) {
 
     this.cardWrap.appendTo(cardsContainer);
 }
-
 
 function Card(devDescr, sensData, Rules) {
     this.devName = devDescr
