@@ -59,3 +59,20 @@ function getSensorValueURL(devName, sensName) {
 function getSensorStatURL(devName, sensName) {
     return "devices/" + devName + "/sensors/" + sensName + "/stat";
 }
+
+function getDeviceTypeStr(type) {
+    switch (type) {
+        case 'temp':
+            return 'Temperature';
+            break;
+        case 'humid':
+            return 'Humidity';
+            break;
+        case 'type':
+            return 'Test';
+            break;
+        default:
+            console.log('Unknown device type!');
+            return '';
+    }
+}
