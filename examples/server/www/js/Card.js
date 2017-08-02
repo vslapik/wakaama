@@ -276,7 +276,6 @@ function Card(devDescr, sensData, Rules) {
     this.addChart = addHighchartToCard/*addChartToCard*/;
 
     this.processOpenCardEvent = processOpenCardEvent;
-    this.processTimeScaleEvent = processTimeScaleEvent;
 
     if (Rules[this.sensorID.split('.')[1]] != undefined) {
         this.configObj = Rules[this.sensorID.split('.')[1]];
