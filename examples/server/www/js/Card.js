@@ -64,36 +64,6 @@ function processOpenCardEvent(e) {
     }
 }
 
-function getMinMaxForDayReport() {
-    var minTime = new Date();
-    var maxTime = new Date();
-
-    minTime.setDate(minTime.getDate() - 1);
-    maxTime.setHours(maxTime.getHours() + 2);
-
-    return [minTime, maxTime];
-}
-
-function getMinMaxForWeekReport() {
-    var minTime = new Date();
-    var maxTime = new Date();
-
-    minTime.setDate(minTime.getDate() - 7);
-    maxTime.setHours(maxTime.getHours() + 2);
-
-    return [minTime, maxTime];
-}
-
-function getMinMaxForMonthReport() {
-    var minTime = new Date();
-    var maxTime = new Date();
-
-    minTime.setDate(minTime.getDate() - 31);
-    maxTime.setHours(maxTime.getHours() + 2);
-
-    return [minTime, maxTime];
-}
-
 function addHighchartToCard(cardElement, chartData) {
     this.canvasWrapper = $('<div/>', { class: 'chart-wrapper'});
     this.chartElem = $('<div/>', { class: 'param-chart', id: 'chart_container'});
