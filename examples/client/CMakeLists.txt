@@ -29,6 +29,8 @@ SET(SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/ipso_temperature_object.c
     )
 
+SET(CMAKE_C_FLAGS "-O0 -g")
+
 add_executable(${PROJECT_NAME} ${SOURCES} ${WAKAAMA_SOURCES} ${SHARED_SOURCES})
 
 # Add WITH_LOGS to debug variant

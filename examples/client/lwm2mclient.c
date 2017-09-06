@@ -1118,6 +1118,10 @@ int main(int argc, char *argv[])
         struct timeval tv;
         fd_set readfds;
 
+        lwm2m_uri_t uri;
+        lwm2m_stringToUri("/3303/0/5700", sizeof("/3303/0/5700"), &uri);
+        lwm2m_resource_value_changed(lwm2mH, &uri);
+
         if (g_reboot)
         {
             time_t tv_sec;
